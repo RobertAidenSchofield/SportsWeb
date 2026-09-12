@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Search, Loader2, Plus, Check, Trophy } from 'lucide-react';
 import { Team } from '@/lib/types';
@@ -26,6 +27,7 @@ export function TeamSearch({
   initialSubscribedTeamIds,
   onSubscriptionChange,
 }: TeamSearchProps) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [selectedLeague, setSelectedLeague] = useState('all');
   const [teams, setTeams] = useState<Team[]>([]);
@@ -95,6 +97,7 @@ export function TeamSearch({
         } else {
           await unfollowTeam(team.id);
         }
+        router.refresh();
       } catch (error) {
         // Rollback on failure
         console.error('Failed to update subscription:', error);

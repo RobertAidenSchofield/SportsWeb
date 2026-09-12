@@ -49,10 +49,18 @@ CREATE POLICY "Users can update own profile"
 ON public.profiles
 FOR UPDATE USING (id = requesting_user_id());
 
--- Teams policies (Public read-only for authenticated or anon)
+-- Teams policies (Public read & upsert for global teams master table)
 CREATE POLICY "Anyone can read teams"
 ON public.teams
 FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert teams"
+ON public.teams
+FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can update teams"
+ON public.teams
+FOR UPDATE USING (true);
 
 -- User subscriptions policies
 CREATE POLICY "Users can manage their own subscriptions" 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Trash2, Trophy, Loader2 } from 'lucide-react';
 import { Team } from '@/lib/types';
@@ -12,6 +13,7 @@ interface SubscribedTeamsProps {
 }
 
 export function SubscribedTeams({ teams, onUnfollow }: SubscribedTeamsProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleUnfollow = (teamId: string) => {
@@ -21,6 +23,7 @@ export function SubscribedTeams({ teams, onUnfollow }: SubscribedTeamsProps) {
     startTransition(async () => {
       try {
         await unfollowTeam(teamId);
+        router.refresh();
       } catch (err) {
         console.error('Failed to unfollow team:', err);
       }

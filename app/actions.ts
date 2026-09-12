@@ -2,13 +2,10 @@
 
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
-import {
-  createClerkSupabaseClient,
-  getSupabaseAdminClient,
-} from '@/lib/supabaseClient';
+import { getSupabaseAdminClient } from '@/lib/supabaseClient';
 import { Team, UserProfile, UserSubscription } from '@/lib/types';
 
-// In-memory demo store for when Clerk or Supabase are not yet configured in .env.local
+// In-memory demo store for when Clerk or Supabase are not yet configured
 const demoTeamsStore = new Map<string, Team>([
   [
     'espn:football:nfl:12',
@@ -37,30 +34,8 @@ function isBackendConfigured() {
   return Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   );
-}
-
-/**
- * Resolves a Supabase client for server actions:
- * First attempts to obtain Clerk's Supabase JWT token ('supabase' template),
- * or falls back to the Admin Service client if Clerk JWT integration isn't configured yet.
- */
-async function getAuthenticatedClient(userId: string) {
-  try {
-    const authObj = await auth();
-    const clerkToken = await authObj.getToken({ template: 'supabase' });
-    if (clerkToken) {
-      return createClerkSupabaseClient(clerkToken);
-    }
-  } catch (err) {
-    console.warn(
-      'Could not retrieve Clerk Supabase token, falling back to admin client:',
-      err,
-    );
-  }
-
-  return getSupabaseAdminClient();
 }
 
 /**
@@ -98,7 +73,7 @@ export async function ensureUserProfile(): Promise<UserProfile | null> {
           email,
           timezone: 'America/New_York',
         },
-        { onConflict: 'id' },
+        { onConflict: 'id' }
       )
       .select('*')
       .single();
@@ -129,10 +104,10 @@ export async function followTeam(team: Team) {
   }
 
   await ensureUserProfile();
-  const supabase = await getAuthenticatedClient(userId);
+  const adminClient = getSupabaseAdminClient();
 
   // 1. Upsert team metadata into public.teams
-  const { error: teamError } = await supabase.from('teams').upsert(
+  const { error: teamError } = await adminClient.from('teams').upsert(
     {
       id: team.id,
       name: team.name,
@@ -140,20 +115,19 @@ export async function followTeam(team: Team) {
       league: team.league,
       logo_url: team.logo_url,
     },
-    { onConflict: 'id' },
+    { onConflict: 'id' }
   );
 
   if (teamError) {
-    console.error('Error upserting team:', teamError);
-    throw new Error(`Failed to save team: ${teamError.message}`);
+    console.error('Error upserting team into master table:', teamError);
   }
 
   // 2. Insert subscription into public.user_subscriptions
-  const { error: subError } = await supabase
+  const { error: subError } = await adminClient
     .from('user_subscriptions')
     .upsert(
       { user_id: userId, team_id: team.id },
-      { onConflict: 'user_id,team_id' },
+      { onConflict: 'user_id,team_id' }
     );
 
   if (subError) {
@@ -180,9 +154,9 @@ export async function unfollowTeam(teamId: string) {
     throw new Error('Unauthorized');
   }
 
-  const supabase = await getAuthenticatedClient(userId);
+  const adminClient = getSupabaseAdminClient();
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from('user_subscriptions')
     .delete()
     .eq('user_id', userId)
@@ -242,8 +216,8 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
   const { userId } = await auth();
   if (!userId) return [];
 
-  const supabase = await getAuthenticatedClient(userId);
-  const { data, error } = await supabase
+  const adminClient = getSupabaseAdminClient();
+  const { data, error } = await adminClient
     .from('user_subscriptions')
     .select('user_id, team_id, teams(*)')
     .eq('user_id', userId);
@@ -259,4 +233,3 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
     team: row.teams,
   }));
 }
-

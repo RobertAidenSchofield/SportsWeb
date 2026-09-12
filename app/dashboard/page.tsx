@@ -7,6 +7,8 @@ import { SchedulePreview } from '@/components/SchedulePreview';
 import { TimezoneSelector } from '@/components/TimezoneSelector';
 import { Trophy, CalendarDays, PlusCircle, Settings } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const configured = Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&

@@ -92,16 +92,33 @@ export function TeamSearch({
     // 2. Perform Server Action inside transition
     startTransition(async () => {
       try {
-        if (nextState) {
-          await followTeam(team);
-        } else {
-          await unfollowTeam(team.id);
+        const res = nextState
+          ? await followTeam(team)
+          : await unfollowTeam(team.id);
+
+        if (!res.success) {
+          alert(`Could not follow team: ${res.error}`);
+          setOptimisticFollows((prev) => {
+            const rollback = new Set(prev);
+            if (isCurrentlyFollowed) {
+              rollback.add(team.id);
+            } else {
+              rollback.delete(team.id);
+            }
+            return rollback;
+          });
+          if (onSubscriptionChange) {
+            onSubscriptionChange(team, isCurrentlyFollowed);
+          }
+          return;
         }
+
         router.refresh();
       } catch (error: any) {
-        // Rollback on failure
         console.error('Failed to update subscription:', error);
-        alert(`Could not follow team: ${error?.message || error || 'Unknown error'}`);
+        alert(
+          `Could not follow team: ${error?.message || error || 'Unknown error'}`
+        );
         setOptimisticFollows((prev) => {
           const rollback = new Set(prev);
           if (isCurrentlyFollowed) {

@@ -26,7 +26,13 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
   PRIMARY KEY (user_id, team_id)
 );
 
--- 4. Row Level Security (RLS) Helper for Clerk
+-- 4. Grant Table Permissions to Supabase API Roles (CRITICAL)
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.profiles TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.teams TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.user_subscriptions TO anon, authenticated, service_role;
+
+-- 5. Row Level Security (RLS) Helper for Clerk
 CREATE OR REPLACE FUNCTION requesting_user_id()
 RETURNS TEXT AS $$
   SELECT NULLIF(
@@ -35,12 +41,12 @@ RETURNS TEXT AS $$
   )::text;
 $$ LANGUAGE SQL STABLE;
 
--- 5. Enable Row Level Security
+-- 6. Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 
--- 6. Apply Profiles Policies (drop first if existing)
+-- 7. Apply Profiles Policies
 DROP POLICY IF EXISTS "Anyone can read profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Anyone can read profiles"
@@ -59,7 +65,7 @@ CREATE POLICY "Anyone can update profiles"
 ON public.profiles
 FOR UPDATE USING (true);
 
--- 7. Apply Teams Policies (Public read & upsert for global teams master list)
+-- 8. Apply Teams Policies
 DROP POLICY IF EXISTS "Anyone can read teams" ON public.teams;
 CREATE POLICY "Anyone can read teams"
 ON public.teams
@@ -75,7 +81,7 @@ CREATE POLICY "Anyone can update teams"
 ON public.teams
 FOR UPDATE USING (true);
 
--- 8. Apply User Subscriptions Policies
+-- 9. Apply User Subscriptions Policies
 DROP POLICY IF EXISTS "Users can manage their own subscriptions" ON public.user_subscriptions;
 DROP POLICY IF EXISTS "Anyone can manage subscriptions" ON public.user_subscriptions;
 CREATE POLICY "Anyone can manage subscriptions" 

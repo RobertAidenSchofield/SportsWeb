@@ -1,0 +1,12 @@
+services:
+  sports-digest-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sports_digest_worker
+    restart: 'no' # Set to "unless-stopped" if using an internal cron scheduler, or trigger on schedule via host cron/Synology Task Scheduler
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+

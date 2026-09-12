@@ -154,6 +154,12 @@ export async function unfollowTeam(teamId: string) {
   if (!userId) {
     throw new Error('Unauthorized');
   }
+
+  const adminClient = getSupabaseAdminClient();
+  const { error } = await adminClient
+    .from('user_subscriptions')
+    .delete()
+    .eq('user_id', userId)
     .eq('team_id', teamId);
 
   if (error) {

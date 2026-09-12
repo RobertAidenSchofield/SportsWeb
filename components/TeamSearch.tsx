@@ -98,9 +98,10 @@ export function TeamSearch({
           await unfollowTeam(team.id);
         }
         router.refresh();
-      } catch (error) {
+      } catch (error: any) {
         // Rollback on failure
         console.error('Failed to update subscription:', error);
+        alert(`Could not follow team: ${error?.message || error || 'Unknown error'}`);
         setOptimisticFollows((prev) => {
           const rollback = new Set(prev);
           if (isCurrentlyFollowed) {

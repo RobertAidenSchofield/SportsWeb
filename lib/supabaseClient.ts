@@ -1,17 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
 /**
  * Creates an authenticated Supabase client using Clerk's JWT template.
  * This injects the Clerk user token so Supabase RLS policies (requesting_user_id) take effect.
  */
 export function createClerkSupabaseClient(clerkToken?: string): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
     );
   }
 
@@ -19,21 +18,26 @@ export function createClerkSupabaseClient(clerkToken?: string): SupabaseClient {
     ? { global: { headers: { Authorization: `Bearer ${clerkToken}` } } }
     : undefined;
 
-  return createClient(supabaseUrl, supabaseAnonKey, options);
+  return createClient(url, anonKey, options);
 }
 
 /**
- * Server-only admin client utilizing the Service Role Key.
- * Bypasses RLS for system operations like Clerk webhooks, batch worker aggregation, and cron jobs.
+ * Server-only admin client utilizing the Service Role Key (with fallback to anon key).
+ * Bypasses RLS when service role key is present, and allows graceful execution if only anon key is set.
  */
 export function getSupabaseAdminClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseServiceKey) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+      'Missing Supabase configuration: please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)'
     );
   }
 
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  return createClient(url, key, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -42,15 +46,17 @@ export function getSupabaseAdminClient(): SupabaseClient {
 }
 
 /**
- * Public/Anon client for general public queries (e.g. searching cached teams).
+ * Public/Anon client for general queries.
  */
 export function getSupabaseAnonClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
     );
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createClient(url, anonKey);
 }
-

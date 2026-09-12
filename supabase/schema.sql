@@ -1,7 +1,7 @@
 -- Sports Digest Database Schema (Supabase PostgreSQL)
 -- Safe to run repeatedly in your Supabase SQL Editor
 
--- 1. Profiles Table (Synced via Clerk Webhook)
+-- 1. Profiles Table (Synced via Clerk Webhook / Server Action)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id TEXT PRIMARY KEY, -- Maps to Clerk's user_id
   email TEXT NOT NULL,
@@ -41,15 +41,23 @@ ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- 6. Apply Profiles Policies (drop first if existing)
+DROP POLICY IF EXISTS "Anyone can read profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
-CREATE POLICY "Users can read own profile"
+CREATE POLICY "Anyone can read profiles"
 ON public.profiles
-FOR SELECT USING (id = requesting_user_id());
+FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-CREATE POLICY "Users can update own profile"
+DROP POLICY IF EXISTS "Anyone can insert profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Anyone can insert profiles"
 ON public.profiles
-FOR UPDATE USING (id = requesting_user_id());
+FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone can update profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Anyone can update profiles"
+ON public.profiles
+FOR UPDATE USING (true);
 
 -- 7. Apply Teams Policies (Public read & upsert for global teams master list)
 DROP POLICY IF EXISTS "Anyone can read teams" ON public.teams;
@@ -69,6 +77,7 @@ FOR UPDATE USING (true);
 
 -- 8. Apply User Subscriptions Policies
 DROP POLICY IF EXISTS "Users can manage their own subscriptions" ON public.user_subscriptions;
-CREATE POLICY "Users can manage their own subscriptions" 
+DROP POLICY IF EXISTS "Anyone can manage subscriptions" ON public.user_subscriptions;
+CREATE POLICY "Anyone can manage subscriptions" 
 ON public.user_subscriptions
-FOR ALL USING (user_id = requesting_user_id());
+FOR ALL USING (true) WITH CHECK (true);

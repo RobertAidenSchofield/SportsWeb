@@ -101,11 +101,28 @@ export async function followTeam(team: Team) {
 
   const { userId } = await auth();
   if (!userId) {
-    throw new Error('Unauthorized');
+    throw new Error('Unauthorized - please sign in first');
   }
 
-  await ensureUserProfile();
+  const user = await currentUser();
+  const email =
+    user?.emailAddresses?.[0]?.emailAddress || `${userId}@user.local`;
   const adminClient = getSupabaseAdminClient();
+
+  // Ensure profile exists in public.profiles first (so foreign key constraint succeeds)
+  const { error: profileError } = await adminClient.from('profiles').upsert(
+    {
+      id: userId,
+      email,
+      timezone: 'America/New_York',
+    },
+    { onConflict: 'id' }
+  );
+
+  if (profileError) {
+    console.error('Error ensuring profile:', profileError);
+    throw new Error(`Database error (profiles table): ${profileError.message}`);
+  }
 
   // 1. Upsert team metadata into public.teams
   const { error: teamError } = await adminClient.from('teams').upsert(

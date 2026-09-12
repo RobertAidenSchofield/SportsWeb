@@ -10,7 +10,7 @@ export function createClerkSupabaseClient(clerkToken?: string): SupabaseClient {
 
   if (!url || !anonKey) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
+      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY',
     );
   }
 
@@ -33,7 +33,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
 
   if (!url || !key) {
     throw new Error(
-      'Missing Supabase configuration: please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)'
+      'Missing Supabase configuration: please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)',
     );
   }
 
@@ -54,9 +54,10 @@ export function getSupabaseAnonClient(): SupabaseClient {
 
   if (!url || !anonKey) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
+      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY',
     );
   }
 
   return createClient(url, anonKey);
 }
+

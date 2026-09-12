@@ -117,7 +117,7 @@ export function TeamSearch({
       } catch (error: any) {
         console.error('Failed to update subscription:', error);
         alert(
-          `Could not follow team: ${error?.message || error || 'Unknown error'}`
+          `Could not follow team: ${error?.message || error || 'Unknown error'}`,
         );
         setOptimisticFollows((prev) => {
           const rollback = new Set(prev);

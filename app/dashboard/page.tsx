@@ -10,16 +10,19 @@ import { Trophy, CalendarDays, PlusCircle, Settings } from 'lucide-react';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const configured = Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-      process.env.CLERK_SECRET_KEY,
-  );
-
-  let userEmail = 'fan@example.com (Preview Mode)';
-
   const profile = await ensureUserProfile();
   const subscriptions = await getUserSubscriptions();
   const userTimezone = profile?.timezone || 'America/New_York';
+
+  let userEmail = profile?.email || 'User';
+  try {
+    const clerkUser = await currentUser();
+    if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      userEmail = clerkUser.emailAddresses[0].emailAddress;
+    }
+  } catch (e) {
+    console.warn('Could not read currentUser in DashboardPage:', e);
+  }
 
   const followedTeams = subscriptions
     .map((s) => s.team)

@@ -35,7 +35,7 @@ function isBackendConfigured() {
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       (process.env.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   );
 }
 
@@ -82,7 +82,7 @@ export async function ensureUserProfile(): Promise<UserProfile | null> {
             email,
             timezone: 'America/New_York',
           },
-          { onConflict: 'id' }
+          { onConflict: 'id' },
         )
         .select('*')
         .single();
@@ -105,7 +105,7 @@ export async function ensureUserProfile(): Promise<UserProfile | null> {
  * Follow a team - returns object with success status and detailed error message if failed
  */
 export async function followTeam(
-  team: Team
+  team: Team,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!isBackendConfigured()) {
@@ -143,7 +143,7 @@ export async function followTeam(
         email,
         timezone: 'America/New_York',
       },
-      { onConflict: 'id' }
+      { onConflict: 'id' },
     );
 
     if (profileError) {
@@ -163,7 +163,7 @@ export async function followTeam(
         league: team.league,
         logo_url: team.logo_url,
       },
-      { onConflict: 'id' }
+      { onConflict: 'id' },
     );
 
     if (teamError) {
@@ -179,7 +179,7 @@ export async function followTeam(
       .from('user_subscriptions')
       .upsert(
         { user_id: userId, team_id: team.id },
-        { onConflict: 'user_id,team_id' }
+        { onConflict: 'user_id,team_id' },
       );
 
     if (subError) {
@@ -201,7 +201,8 @@ export async function followTeam(
     console.error('Unexpected followTeam error:', err);
     return {
       success: false,
-      error: err?.message || 'An unexpected error occurred while following team.',
+      error:
+        err?.message || 'An unexpected error occurred while following team.',
     };
   }
 }
@@ -210,7 +211,7 @@ export async function followTeam(
  * Unfollow a team
  */
 export async function unfollowTeam(
-  teamId: string
+  teamId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!isBackendConfigured()) {
@@ -261,7 +262,7 @@ export async function unfollowTeam(
  * Update user's preferred timezone
  */
 export async function updateUserTimezone(
-  timezone: string
+  timezone: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!isBackendConfigured()) {
@@ -338,3 +339,4 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
     return [];
   }
 }
+

@@ -34,7 +34,8 @@ function isBackendConfigured() {
   return Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+      (process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   );
 }
 
@@ -73,7 +74,7 @@ export async function ensureUserProfile(): Promise<UserProfile | null> {
           email,
           timezone: 'America/New_York',
         },
-        { onConflict: 'id' }
+        { onConflict: 'id' },
       )
       .select('*')
       .single();
@@ -115,7 +116,7 @@ export async function followTeam(team: Team) {
       league: team.league,
       logo_url: team.logo_url,
     },
-    { onConflict: 'id' }
+    { onConflict: 'id' },
   );
 
   if (teamError) {
@@ -127,7 +128,7 @@ export async function followTeam(team: Team) {
     .from('user_subscriptions')
     .upsert(
       { user_id: userId, team_id: team.id },
-      { onConflict: 'user_id,team_id' }
+      { onConflict: 'user_id,team_id' },
     );
 
   if (subError) {
@@ -153,13 +154,6 @@ export async function unfollowTeam(teamId: string) {
   if (!userId) {
     throw new Error('Unauthorized');
   }
-
-  const adminClient = getSupabaseAdminClient();
-
-  const { error } = await adminClient
-    .from('user_subscriptions')
-    .delete()
-    .eq('user_id', userId)
     .eq('team_id', teamId);
 
   if (error) {
@@ -233,3 +227,4 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
     team: row.teams,
   }));
 }
+

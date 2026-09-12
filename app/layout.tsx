@@ -15,9 +15,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang='en' className='dark' suppressHydrationWarning>
       <body
-        className="bg-[#090d16] text-gray-100 min-h-screen antialiased selection:bg-emerald-500 selection:text-gray-950"
+        className='bg-[#090d16] text-gray-100 min-h-screen antialiased selection:bg-emerald-500 selection:text-gray-950'
         suppressHydrationWarning
       >
         <ClerkProvider>
@@ -28,3 +28,4 @@ export default function RootLayout({
     </html>
   );
 }
+

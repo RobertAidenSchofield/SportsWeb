@@ -4,6 +4,7 @@ import { ensureUserProfile, getUserSubscriptions } from '@/app/actions';
 import { TeamSearch } from '@/components/TeamSearch';
 import { SubscribedTeams } from '@/components/SubscribedTeams';
 import { SchedulePreview } from '@/components/SchedulePreview';
+import { CalendarSyncCard } from '@/components/CalendarSyncCard';
 import { TimezoneSelector } from '@/components/TimezoneSelector';
 import { Trophy, CalendarDays, PlusCircle, Settings } from 'lucide-react';
 
@@ -69,6 +70,12 @@ export default async function DashboardPage() {
 
         <SubscribedTeams teams={followedTeams} />
       </section>
+
+      {/* Calendar Subscription & Shareable Widget */}
+      <CalendarSyncCard
+        userId={profile?.id || 'demo_user'}
+        followedTeamsCount={followedTeams.length}
+      />
 
       {/* 7-Day Upcoming Schedule Preview */}
       {followedTeams.length > 0 && (

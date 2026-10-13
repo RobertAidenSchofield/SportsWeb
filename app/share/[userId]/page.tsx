@@ -216,10 +216,15 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                               <Clock className="h-3 w-3" />
                               {formattedTime}
                             </span>
-                            {fixture.broadcast && (
-                              <span className="flex items-center gap-1 text-gray-300 font-semibold">
-                                <Tv className="h-3 w-3 text-gray-400" />
+                            {fixture.broadcast ? (
+                              <span className="flex items-center gap-1.5 text-cyan-300 font-semibold bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded text-[10px]">
+                                <Tv className="h-3 w-3 text-cyan-400" />
                                 {fixture.broadcast}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-gray-500 text-[10px]">
+                                <Tv className="h-3 w-3 text-gray-600" />
+                                TV TBA
                               </span>
                             )}
                             <span className="text-[10px] uppercase bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
@@ -431,12 +436,15 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                             </div>
 
                             <div className="flex items-center gap-3">
-                              {fixture.broadcast && (
-                                <div className="flex items-center gap-1.5 text-gray-200">
-                                  <Tv className="h-3.5 w-3.5 text-gray-400" />
-                                  <span className="font-semibold">
-                                    {fixture.broadcast}
-                                  </span>
+                              {fixture.broadcast ? (
+                                <div className="flex items-center gap-1.5 text-cyan-300 font-semibold bg-cyan-950/40 border border-cyan-500/30 px-2.5 py-1 rounded-lg">
+                                  <Tv className="h-3.5 w-3.5 text-cyan-400" />
+                                  <span>{fixture.broadcast}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+                                  <Tv className="h-3.5 w-3.5 text-gray-600" />
+                                  <span>TV TBA</span>
                                 </div>
                               )}
                               <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] text-gray-400 border border-white/5 uppercase">

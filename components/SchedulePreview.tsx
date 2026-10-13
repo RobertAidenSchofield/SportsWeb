@@ -200,12 +200,15 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
                     </div>
 
                     <div className='flex items-center gap-3'>
-                      {fixture.broadcast && (
-                        <div className='flex items-center gap-1 text-gray-300'>
-                          <Tv className='h-3.5 w-3.5 text-gray-400' />
-                          <span className='font-semibold'>
-                            {fixture.broadcast}
-                          </span>
+                      {fixture.broadcast ? (
+                        <div className='flex items-center gap-1.5 text-cyan-300 font-semibold bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md'>
+                          <Tv className='h-3.5 w-3.5 text-cyan-400' />
+                          <span>{fixture.broadcast}</span>
+                        </div>
+                      ) : (
+                        <div className='flex items-center gap-1.5 text-gray-500 text-[11px]'>
+                          <Tv className='h-3.5 w-3.5 text-gray-600' />
+                          <span>TV TBA</span>
                         </div>
                       )}
                       <span className='rounded bg-white/5 px-2 py-0.5 text-[10px] text-gray-400 border border-white/5 uppercase'>

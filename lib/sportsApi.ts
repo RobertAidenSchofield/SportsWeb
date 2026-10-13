@@ -232,14 +232,33 @@ export async function getUpcomingTeamFixtures(
         currentTeamCompetitor?.team?.logos?.[0]?.href || teamLogo || '';
       const isHome = currentTeamCompetitor?.homeAway === 'home';
 
-      // Extract broadcast network if available
-      let broadcast: string | undefined = undefined;
-      if (competition.broadcasts && competition.broadcasts.length > 0) {
-        const names = competition.broadcasts[0]?.names;
-        if (names && names.length > 0) {
-          broadcast = names.join(', ');
+      // Extract broadcast network (TV / Streaming)
+      const broadcastChannels: string[] = [];
+      const rawBroadcasts = [
+        ...(competition.broadcasts || []),
+        ...(competition.geoBroadcasts || []),
+        ...(event.broadcasts || []),
+      ];
+
+      for (const b of rawBroadcasts) {
+        // Skip radio or audio feeds
+        const typeName = (b.type?.shortName || b.type?.name || '').toLowerCase();
+        if (typeName === 'radio' || typeName === 'audio') continue;
+
+        const channelName =
+          b.media?.shortName ||
+          b.media?.name ||
+          (Array.isArray(b.names) && b.names.length > 0 ? b.names.join('/') : null) ||
+          (typeof b.name === 'string' ? b.name : null) ||
+          (typeof b.station === 'string' ? b.station : null);
+
+        if (channelName && !broadcastChannels.includes(channelName)) {
+          broadcastChannels.push(channelName);
         }
       }
+
+      const broadcast =
+        broadcastChannels.length > 0 ? broadcastChannels.join(', ') : undefined;
 
       const venue = competition.venue?.fullName;
       const status = competition.status?.type?.name || 'scheduled';

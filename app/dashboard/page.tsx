@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation';
 import {
   ensureUserProfile,
   getUserSubscriptions,
-  isBackendConfigured,
 } from '@/app/actions';
+import { isBackendConfigured } from '@/lib/supabaseClient';
 import { TeamSearch } from '@/components/TeamSearch';
 import { SubscribedTeams } from '@/components/SubscribedTeams';
 import { SchedulePreview } from '@/components/SchedulePreview';

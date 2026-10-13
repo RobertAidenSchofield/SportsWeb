@@ -61,3 +61,31 @@ export function getSupabaseAnonClient(): SupabaseClient {
   return createClient(url, anonKey);
 }
 
+/**
+ * Checks whether both Clerk and Supabase credentials are configured in environment variables.
+ */
+export function isBackendConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      (process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  );
+}
+
+/**
+ * Formats database errors into user-friendly diagnostic messages.
+ */
+export function formatSupabaseError(error: any): string {
+  if (!error) return 'Unknown database error';
+  const msg = error.message || String(error);
+  if (msg.includes('fetch failed') || msg.includes('ENOTFOUND')) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    return `Cannot reach Supabase (${supabaseUrl}). The project may be paused in your Supabase Dashboard or the Project URL has a typo. Please check your project status at https://supabase.com/dashboard`;
+  }
+  if (msg.includes('permission denied') || msg.includes('42501')) {
+    return `Permission denied on table. Please make sure the SQL in supabase/schema.sql has been run in your Supabase SQL Editor.`;
+  }
+  return msg;
+}
+

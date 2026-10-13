@@ -52,12 +52,12 @@ export function Navbar({ isClerkConfigured = false }: NavbarProps) {
               </SignedIn>
 
               <SignedOut>
-                <SignInButton mode='modal'>
+                <SignInButton mode='modal' forceRedirectUrl='/dashboard'>
                   <button className='text-sm font-medium text-gray-300 hover:text-white transition-colors px-3 py-1.5'>
                     Sign In
                   </button>
                 </SignInButton>
-                <SignUpButton mode='modal'>
+                <SignUpButton mode='modal' forceRedirectUrl='/dashboard'>
                   <button className='flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-gray-950 hover:bg-emerald-400 transition-all shadow-sm shadow-emerald-500/20'>
                     <Sparkles className='h-4 w-4' />
                     Get Started

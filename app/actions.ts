@@ -30,13 +30,26 @@ const demoTeamsStore = new Map<string, Team>([
 ]);
 let demoTimezoneStore = 'America/New_York';
 
-function isBackendConfigured() {
+export function isBackendConfigured() {
   return Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       (process.env.SUPABASE_SERVICE_ROLE_KEY ||
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   );
+}
+
+export function formatSupabaseError(error: any): string {
+  if (!error) return 'Unknown database error';
+  const msg = error.message || String(error);
+  if (msg.includes('fetch failed') || msg.includes('ENOTFOUND')) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    return `Cannot reach Supabase (${supabaseUrl}). The project may be paused in your Supabase Dashboard or the Project URL has a typo. Please check your project status at https://supabase.com/dashboard`;
+  }
+  if (msg.includes('permission denied') || msg.includes('42501')) {
+    return `Permission denied on table. Please make sure the SQL in supabase/schema.sql has been run in your Supabase SQL Editor.`;
+  }
+  return msg;
 }
 
 /**
@@ -150,7 +163,7 @@ export async function followTeam(
       console.error('Error ensuring profile:', profileError);
       return {
         success: false,
-        error: `Supabase profiles error: ${profileError.message}. Please verify the SQL schema has been executed in your Supabase SQL Editor.`,
+        error: `Supabase profiles error: ${formatSupabaseError(profileError)}`,
       };
     }
 
@@ -170,7 +183,7 @@ export async function followTeam(
       console.error('Error upserting team into master table:', teamError);
       return {
         success: false,
-        error: `Supabase teams error: ${teamError.message}`,
+        error: `Supabase teams error: ${formatSupabaseError(teamError)}`,
       };
     }
 
@@ -186,7 +199,7 @@ export async function followTeam(
       console.error('Error subscribing to team:', subError);
       return {
         success: false,
-        error: `Supabase user_subscriptions error: ${subError.message}`,
+        error: `Supabase user_subscriptions error: ${formatSupabaseError(subError)}`,
       };
     }
 
@@ -238,7 +251,7 @@ export async function unfollowTeam(
       console.error('Error unfollowing team:', error);
       return {
         success: false,
-        error: `Supabase unfollow error: ${error.message}`,
+        error: `Supabase unfollow error: ${formatSupabaseError(error)}`,
       };
     }
 

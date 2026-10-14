@@ -1,7 +1,7 @@
 'use server';
 
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@/lib/supabaseServer';
 import {
   getSupabaseAdminClient,
   isBackendConfigured,
@@ -9,7 +9,7 @@ import {
 } from '@/lib/supabaseClient';
 import { Team, UserProfile, UserSubscription } from '@/lib/types';
 
-// In-memory demo store for when Clerk or Supabase are not yet configured
+// In-memory demo store for when Supabase is not yet configured
 const demoTeamsStore = new Map<string, Team>([
   [
     'espn:football:nfl:12',
@@ -35,7 +35,7 @@ const demoTeamsStore = new Map<string, Team>([
 let demoTimezoneStore = 'America/New_York';
 
 /**
- * Ensures the profile exists in public.profiles
+ * Ensures the profile exists in public.profiles for the logged in Supabase user
  */
 export async function ensureUserProfile(): Promise<UserProfile | null> {
   if (!isBackendConfigured()) {
@@ -47,18 +47,18 @@ export async function ensureUserProfile(): Promise<UserProfile | null> {
   }
 
   try {
-    const { userId } = await auth();
-    if (!userId) return null;
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    let email = `${userId}@user.local`;
-    try {
-      const user = await currentUser();
-      if (user?.emailAddresses?.[0]?.emailAddress) {
-        email = user.emailAddresses[0].emailAddress;
-      }
-    } catch (e) {
-      console.warn('Could not fetch email from Clerk currentUser:', e);
+    if (userError || !user) {
+      return null;
     }
+
+    const userId = user.id;
+    const email = user.email || `${userId}@user.local`;
 
     const adminClient = getSupabaseAdminClient();
 
@@ -111,27 +111,24 @@ export async function followTeam(
       return { success: true };
     }
 
-    const { userId } = await auth();
-    if (!userId) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
       return {
         success: false,
         error: 'Unauthorized: please sign in before following a team.',
       };
     }
 
+    const userId = user.id;
+    const email = user.email || `${userId}@user.local`;
+
     const adminClient = getSupabaseAdminClient();
 
     // 1. Ensure user profile exists in public.profiles first (so foreign key succeeds)
-    let email = `${userId}@user.local`;
-    try {
-      const user = await currentUser();
-      if (user?.emailAddresses?.[0]?.emailAddress) {
-        email = user.emailAddresses[0].emailAddress;
-      }
-    } catch (e) {
-      console.warn('Could not fetch email from Clerk:', e);
-    }
-
     const { error: profileError } = await adminClient.from('profiles').upsert(
       {
         id: userId,
@@ -217,10 +214,16 @@ export async function unfollowTeam(
       return { success: true };
     }
 
-    const { userId } = await auth();
-    if (!userId) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
       return { success: false, error: 'Unauthorized: please sign in first.' };
     }
+
+    const userId = user.id;
 
     const adminClient = getSupabaseAdminClient();
     const { error } = await adminClient
@@ -268,10 +271,16 @@ export async function updateUserTimezone(
       return { success: true };
     }
 
-    const { userId } = await auth();
-    if (!userId) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
       return { success: false, error: 'Unauthorized: please sign in first.' };
     }
+
+    const userId = user.id;
 
     const adminClient = getSupabaseAdminClient();
     const { error } = await adminClient
@@ -310,8 +319,14 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
       }));
     }
 
-    const { userId } = await auth();
-    if (!userId) return [];
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    const userId = user.id;
 
     const adminClient = getSupabaseAdminClient();
     const { data, error } = await adminClient
@@ -334,4 +349,3 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
     return [];
   }
 }
-

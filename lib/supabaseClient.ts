@@ -1,27 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Creates an authenticated Supabase client using Clerk's JWT template.
- * This injects the Clerk user token so Supabase RLS policies (requesting_user_id) take effect.
- */
-export function createClerkSupabaseClient(clerkToken?: string): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anonKey) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    );
-  }
-
-  const options = clerkToken
-    ? { global: { headers: { Authorization: `Bearer ${clerkToken}` } } }
-    : undefined;
-
-  return createClient(url, anonKey, options);
-}
-
-/**
  * Server-only admin client utilizing the Service Role Key (with fallback to anon key).
  * Bypasses RLS when service role key is present, and allows graceful execution if only anon key is set.
  */
@@ -62,12 +41,11 @@ export function getSupabaseAnonClient(): SupabaseClient {
 }
 
 /**
- * Checks whether both Clerk and Supabase credentials are configured in environment variables.
+ * Checks whether Supabase credentials are configured in environment variables.
  */
 export function isBackendConfigured(): boolean {
   return Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
       (process.env.SUPABASE_SERVICE_ROLE_KEY ||
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   );

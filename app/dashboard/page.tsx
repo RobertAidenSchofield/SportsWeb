@@ -1,5 +1,5 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabaseServer';
 import {
   ensureUserProfile,
   getUserSubscriptions,
@@ -23,24 +23,18 @@ export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const backendConfigured = isBackendConfigured();
-  let clerkUserId: string | null = null;
-  let userEmail = 'User';
+  const supabase = await createClient();
 
-  try {
-    const { userId } = await auth();
-    clerkUserId = userId;
-  } catch (e) {
-    console.warn('Could not read auth in DashboardPage:', e);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (backendConfigured && !user) {
+    redirect('/sign-in');
   }
 
-  try {
-    const clerkUser = await currentUser();
-    if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
-      userEmail = clerkUser.emailAddresses[0].emailAddress;
-    }
-  } catch (e) {
-    console.warn('Could not read currentUser in DashboardPage:', e);
-  }
+  const userEmail = user?.email || 'fan@example.com';
+  const effectiveUserId = user?.id || 'demo_user';
 
   let profile = null;
   let subscriptions: any[] = [];
@@ -64,7 +58,6 @@ export default async function DashboardPage() {
     connectionError = `Cannot connect to Supabase at ${supabaseUrl}. Your project may be paused in the Supabase Dashboard, or your Project URL might have a typo.`;
   }
 
-  const effectiveUserId = profile?.id || clerkUserId || 'demo_user';
   const userTimezone = profile?.timezone || 'America/New_York';
 
   const followedTeams = subscriptions

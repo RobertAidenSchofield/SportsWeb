@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { SignUpButton, SignedIn, SignedOut } from '@clerk/nextjs';
+import { createClient } from '@/lib/supabaseServer';
 import {
   Trophy,
   Mail,
@@ -12,7 +12,11 @@ import {
   Zap,
 } from 'lucide-react';
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   return (
     <div className='relative isolate overflow-hidden'>
       {/* Background glow effects */}
@@ -39,30 +43,17 @@ export default function HomePage() {
         </p>
 
         <div className='mt-8 flex items-center justify-center gap-4'>
-          {Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) ? (
-            <>
-              <SignedOut>
-                <SignUpButton mode='modal'>
-                  <button className='flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-base font-bold text-gray-950 hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02]'>
-                    Start Your Free Digest
-                    <ArrowRight className='h-4 w-4' />
-                  </button>
-                </SignUpButton>
-              </SignedOut>
-
-              <SignedIn>
-                <Link
-                  href='/dashboard'
-                  className='flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-base font-bold text-gray-950 hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20'
-                >
-                  Go to Your Dashboard
-                  <ArrowRight className='h-4 w-4' />
-                </Link>
-              </SignedIn>
-            </>
-          ) : (
+          {user ? (
             <Link
               href='/dashboard'
+              className='flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-base font-bold text-gray-950 hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02]'
+            >
+              Go to Your Dashboard
+              <ArrowRight className='h-4 w-4' />
+            </Link>
+          ) : (
+            <Link
+              href='/sign-up'
               className='flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-base font-bold text-gray-950 hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02]'
             >
               Start Your Free Digest

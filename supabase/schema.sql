@@ -1,9 +1,9 @@
--- Sports Digest Database Schema (Supabase PostgreSQL)
+-- Sports Digest Database Schema (Supabase PostgreSQL with Native Supabase Auth)
 -- Safe to run repeatedly in your Supabase SQL Editor
 
--- 1. Profiles Table (Synced via Clerk Webhook / Server Action)
+-- 1. Profiles Table
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id TEXT PRIMARY KEY, -- Maps to Clerk's user_id
+  id TEXT PRIMARY KEY, -- Maps to Supabase auth.users.id
   email TEXT NOT NULL,
   timezone TEXT DEFAULT 'America/New_York',
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -26,30 +26,18 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
   PRIMARY KEY (user_id, team_id)
 );
 
--- 4. Row Level Security (RLS) Helper for Clerk
--- 4. Grant Table Permissions to Supabase API Roles (CRITICAL)
+-- 4. Grant Table Permissions to Supabase API Roles
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.profiles TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.teams TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.user_subscriptions TO anon, authenticated, service_role;
 
--- 5. Row Level Security (RLS) Helper for Clerk
-CREATE OR REPLACE FUNCTION requesting_user_id()
-RETURNS TEXT AS $$
-  SELECT NULLIF(
-    current_setting('request.jwt.claims', true)::json->>'sub',
-    ''
-  )::text;
-$$ LANGUAGE SQL STABLE;
-
--- 5. Enable Row Level Security
--- 6. Enable Row Level Security
+-- 5. Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 
--- 6. Apply Profiles Policies (drop first if existing)
--- 7. Apply Profiles Policies
+-- 6. Profiles Policies
 DROP POLICY IF EXISTS "Anyone can read profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Anyone can read profiles"
@@ -68,8 +56,7 @@ CREATE POLICY "Anyone can update profiles"
 ON public.profiles
 FOR UPDATE USING (true);
 
--- 7. Apply Teams Policies (Public read & upsert for global teams master list)
--- 8. Apply Teams Policies
+-- 7. Teams Policies (Public read & upsert for global teams master list)
 DROP POLICY IF EXISTS "Anyone can read teams" ON public.teams;
 CREATE POLICY "Anyone can read teams"
 ON public.teams
@@ -85,10 +72,26 @@ CREATE POLICY "Anyone can update teams"
 ON public.teams
 FOR UPDATE USING (true);
 
--- 8. Apply User Subscriptions Policies
--- 9. Apply User Subscriptions Policies
+-- 8. User Subscriptions Policies
 DROP POLICY IF EXISTS "Users can manage their own subscriptions" ON public.user_subscriptions;
 DROP POLICY IF EXISTS "Anyone can manage subscriptions" ON public.user_subscriptions;
 CREATE POLICY "Anyone can manage subscriptions" 
 ON public.user_subscriptions
 FOR ALL USING (true) WITH CHECK (true);
+
+-- 9. Automatic Profile Creation Trigger on Auth Signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, timezone)
+  VALUES (new.id::text, COALESCE(new.email, 'user@domain.local'), 'America/New_York')
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT OR UPDATE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { ClerkProvider } from '@clerk/nextjs';
 import { Navbar } from '@/components/Navbar';
 import './globals.css';
 
@@ -20,12 +19,9 @@ export default function RootLayout({
         className='bg-[#090d16] text-gray-100 min-h-screen antialiased selection:bg-emerald-500 selection:text-gray-950'
         suppressHydrationWarning
       >
-        <ClerkProvider>
-          <Navbar isClerkConfigured={true} />
-          <main>{children}</main>
-        </ClerkProvider>
+        <Navbar />
+        <main>{children}</main>
       </body>
     </html>
   );
 }
-

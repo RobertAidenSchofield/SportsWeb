@@ -1,82 +1,146 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import {
-  SignInButton,
-  SignUpButton,
-  UserButton,
-  SignedIn,
-  SignedOut,
-} from '@clerk/nextjs';
-import { Trophy, Calendar, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabaseBrowser';
+import { AuthModal } from './AuthModal';
+import { Trophy, Calendar, Sparkles, LogOut, User as UserIcon } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 
-interface NavbarProps {
-  isClerkConfigured?: boolean;
-}
+export function Navbar() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
-export function Navbar({ isClerkConfigured = false }: NavbarProps) {
+  const supabase = createClient();
+
+  useEffect(() => {
+    // Get initial user
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    // Listen to real-time auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      router.push('/');
+      router.refresh();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
+  const openSignIn = () => {
+    setAuthModalMode('signin');
+    setAuthModalOpen(true);
+  };
+
+  const openSignUp = () => {
+    setAuthModalMode('signup');
+    setAuthModalOpen(true);
+  };
+
+  const userInitial = user?.email ? user.email[0].toUpperCase() : 'U';
+
   return (
-    <header className='sticky top-0 z-50 w-full border-b border-white/10 bg-[#090d16]/80 backdrop-blur-md'>
-      <div className='mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8'>
-        <Link href='/' className='flex items-center gap-2.5 group'>
-          <div className='flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:border-emerald-500/40 transition-colors'>
-            <Trophy className='h-5 w-5' />
-          </div>
-          <span className='font-bold text-lg tracking-tight text-white flex items-center gap-1.5'>
-            SportsDigest
-            <span className='rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20'>
-              Weekly
+    <>
+      <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-[#090d16]/80 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:border-emerald-500/40 transition-colors">
+              <Trophy className="h-5 w-5" />
+            </div>
+            <span className="font-bold text-lg tracking-tight text-white flex items-center gap-1.5">
+              SportsDigest
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">
+                Weekly
+              </span>
             </span>
-          </span>
-        </Link>
+          </Link>
 
-        <nav className='flex items-center gap-4'>
-          {isClerkConfigured ? (
-            <>
-              <SignedIn>
+          <nav className="flex items-center gap-4">
+            {user ? (
+              <div className="flex items-center gap-3">
                 <Link
-                  href='/dashboard'
-                  className='flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/5'
+                  href="/dashboard"
+                  className="flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
                 >
-                  <Calendar className='h-4 w-4 text-emerald-400' />
+                  <Calendar className="h-4 w-4 text-emerald-400" />
                   <span>Dashboard</span>
                 </Link>
-                <div className='h-5 w-[1px] bg-white/10 mx-1' />
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: 'h-8 w-8 ring-2 ring-emerald-500/30',
-                    },
-                  }}
-                />
-              </SignedIn>
 
-              <SignedOut>
-                <SignInButton mode='modal' forceRedirectUrl='/dashboard'>
-                  <button className='text-sm font-medium text-gray-300 hover:text-white transition-colors px-3 py-1.5'>
-                    Sign In
+                <div className="h-4 w-[1px] bg-white/10 mx-1 hidden sm:block" />
+
+                {/* User avatar & sign-out button */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300">
+                    <div className="h-5 w-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold text-emerald-300">
+                      {userInitial}
+                    </div>
+                    <span className="max-w-[120px] truncate hidden sm:inline">
+                      {user.email}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    disabled={isSigningOut}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut className="h-4 w-4" />
                   </button>
-                </SignInButton>
-                <SignUpButton mode='modal' forceRedirectUrl='/dashboard'>
-                  <button className='flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-gray-950 hover:bg-emerald-400 transition-all shadow-sm shadow-emerald-500/20'>
-                    <Sparkles className='h-4 w-4' />
-                    Get Started
-                  </button>
-                </SignUpButton>
-              </SignedOut>
-            </>
-          ) : (
-            <Link
-              href='/dashboard'
-              className='flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-gray-950 hover:bg-emerald-400 transition-all shadow-sm shadow-emerald-500/20'
-            >
-              <Calendar className='h-4 w-4' />
-              <span>Go to Dashboard</span>
-            </Link>
-          )}
-        </nav>
-      </div>
-    </header>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={openSignIn}
+                  className="text-sm font-medium text-gray-300 hover:text-white transition-colors px-3 py-1.5"
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={openSignUp}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-gray-950 hover:bg-emerald-400 transition-all shadow-sm shadow-emerald-500/20"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>Get Started</span>
+                </button>
+              </div>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      {/* Auth Modal for 1-click popup signin/signup */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode={authModalMode}
+      />
+    </>
   );
 }
-

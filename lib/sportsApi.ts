@@ -207,14 +207,203 @@ function matchesLeague(teamLeague: string, filter: string): boolean {
   return false;
 }
 
+// Comprehensive college university, mascot, and regional aliases
+const COLLEGE_PROGRAM_ALIASES: Record<string, string[]> = {
+  // Texas / UT Austin
+  ut: ['texas longhorns', 'texas'],
+  'ut austin': ['texas longhorns', 'texas'],
+  austin: ['texas longhorns'],
+  texas: ['texas longhorns'],
+  longhorns: ['texas longhorns'],
+  horns: ['texas longhorns'],
+  'hook em': ['texas longhorns'],
+
+  // Alabama / Bama
+  bama: ['alabama crimson tide', 'alabama'],
+  alabama: ['alabama crimson tide'],
+  'crimson tide': ['alabama crimson tide'],
+  'roll tide': ['alabama crimson tide'],
+  tuscaloosa: ['alabama crimson tide'],
+
+  // Top National Programs
+  georgia: ['georgia bulldogs'],
+  uga: ['georgia bulldogs'],
+  dawgs: ['georgia bulldogs'],
+
+  'ohio state': ['ohio state buckeyes'],
+  osu: [
+    'ohio state buckeyes',
+    'oklahoma state cowboys',
+    'oregon state beavers',
+  ],
+  buckeyes: ['ohio state buckeyes'],
+
+  michigan: ['michigan wolverines'],
+  wolverines: ['michigan wolverines'],
+
+  'notre dame': ['notre dame fighting irish'],
+  nd: ['notre dame fighting irish'],
+  irish: ['notre dame fighting irish'],
+
+  lsu: ['lsu tigers'],
+  tigers: ['lsu tigers', 'clemson tigers', 'auburn tigers'],
+
+  clemson: ['clemson tigers'],
+
+  florida: ['florida gators'],
+  uf: ['florida gators'],
+  gators: ['florida gators'],
+
+  'florida state': ['florida state seminoles'],
+  fsu: ['florida state seminoles'],
+  seminoles: ['florida state seminoles'],
+  noles: ['florida state seminoles'],
+
+  tennessee: ['tennessee volunteers'],
+  vols: ['tennessee volunteers'],
+  volunteers: ['tennessee volunteers'],
+
+  'penn state': ['penn state nittany lions'],
+  psu: ['penn state nittany lions'],
+  'nittany lions': ['penn state nittany lions'],
+
+  usc: ['usc trojans'],
+  trojans: ['usc trojans'],
+
+  ucla: ['ucla bruins'],
+  bruins: ['ucla bruins'],
+
+  oregon: ['oregon ducks'],
+  ducks: ['oregon ducks'],
+
+  washington: ['washington huskies'],
+  huskies: ['washington huskies', 'connecticut huskies'],
+  uconn: ['connecticut huskies'],
+
+  oklahoma: ['oklahoma sooners'],
+  sooners: ['oklahoma sooners'],
+  ou: ['oklahoma sooners'],
+
+  'texas a&m': ['texas a&m aggies'],
+  tamu: ['texas a&m aggies'],
+  aggies: ['texas a&m aggies'],
+
+  auburn: ['auburn tigers'],
+  'war eagle': ['auburn tigers'],
+
+  'ole miss': ['ole miss rebels'],
+  rebels: ['ole miss rebels'],
+
+  colorado: ['colorado buffaloes'],
+  buffs: ['colorado buffaloes'],
+  buffaloes: ['colorado buffaloes'],
+
+  'north carolina': ['north carolina tar heels'],
+  unc: ['north carolina tar heels'],
+  'tar heels': ['north carolina tar heels'],
+
+  duke: ['duke blue devils'],
+  'blue devils': ['duke blue devils'],
+
+  kentucky: ['kentucky wildcats'],
+  wildcats: [
+    'kentucky wildcats',
+    'arizona wildcats',
+    'villanova wildcats',
+    'northwestern wildcats',
+  ],
+
+  kansas: ['kansas jayhawks'],
+  jayhawks: ['kansas jayhawks'],
+  ku: ['kansas jayhawks'],
+
+  miami: ['miami hurricanes'],
+  canes: ['miami hurricanes'],
+
+  wisconsin: ['wisconsin badgers'],
+  badgers: ['wisconsin badgers'],
+
+  nebraska: ['nebraska cornhuskers'],
+  cornhuskers: ['nebraska cornhuskers'],
+  huskers: ['nebraska cornhuskers'],
+
+  iowa: ['iowa hawkeyes'],
+  hawkeyes: ['iowa hawkeyes'],
+
+  arkansas: ['arkansas razorbacks'],
+  razorbacks: ['arkansas razorbacks'],
+  hogs: ['arkansas razorbacks'],
+
+  'south carolina': ['south carolina gamecocks'],
+  gamecocks: ['south carolina gamecocks'],
+
+  purdue: ['purdue boilermakers'],
+  boilermakers: ['purdue boilermakers'],
+
+  indiana: ['indiana hoosiers'],
+  hoosiers: ['indiana hoosiers'],
+
+  illinois: ['illinois fighting illini'],
+  illini: ['illinois fighting illini'],
+
+  byu: ['byu cougars'],
+  cougars: ['byu cougars', 'houston cougars'],
+
+  utah: ['utah utes'],
+  utes: ['utah utes'],
+
+  arizona: ['arizona wildcats'],
+  'arizona state': ['arizona state sun devils'],
+  asu: ['arizona state sun devils'],
+
+  pitt: ['pittsburgh panthers'],
+  syracuse: ['syracuse orange'],
+  virginia: ['virginia cavaliers'],
+  uva: ['virginia cavaliers'],
+  'virginia tech': ['virginia tech hokies'],
+  vt: ['virginia tech hokies'],
+  hokies: ['virginia tech hokies'],
+  'nc state': ['nc state wolfpack'],
+  wolfpack: ['nc state wolfpack'],
+  gonzaga: ['gonzaga bulldogs'],
+  zags: ['gonzaga bulldogs'],
+  villanova: ['villanova wildcats'],
+  nova: ['villanova wildcats'],
+};
+
+/**
+ * Normalizes university queries (e.g. "university of alabama" -> "alabama")
+ */
+function normalizeCollegeSearch(q: string): {
+  original: string;
+  normalized: string;
+  isCollege: boolean;
+} {
+  const original = q.toLowerCase().trim();
+  const isCollege = /\b(university|univ|u of|college)\b/i.test(original);
+  const stripped = original
+    .replace(/\bthe\s+university\s+of\s+/gi, '')
+    .replace(/\buniversity\s+of\s+/gi, '')
+    .replace(/\bthe\s+univ\s+of\s+/gi, '')
+    .replace(/\buniv\s+of\s+/gi, '')
+    .replace(/\bthe\s+u\s+of\s+/gi, '')
+    .replace(/\bu\s+of\s+/gi, '')
+    .replace(/\s+university\b/gi, '')
+    .replace(/\s+univ\b/gi, '')
+    .trim();
+
+  return { original, normalized: stripped || original, isCollege };
+}
+
 /**
  * Compute fuzzy relevance score for a team against a query
  */
 function scoreTeamMatch(team: Team, query: string): number {
-  const q = query.trim().toLowerCase();
-  if (!q) return 0;
+  const { original: q, normalized: normQ, isCollege } =
+    normalizeCollegeSearch(query);
+  if (!q && !normQ) return 0;
 
-  const qTokens = q.split(/\s+/).filter(Boolean);
+  const qTokens = (normQ || q).split(/\s+/).filter(Boolean);
   const fullName = team.name.toLowerCase();
   const shortName = (team.short_name || '').toLowerCase();
   const location = (team.location || '').toLowerCase();
@@ -227,28 +416,38 @@ function scoreTeamMatch(team: Team, query: string): number {
 
   let score = 0;
 
-  // 1. Direct exact & prefix matches
-  if (fullName === q) score += 1000;
-  else if (shortName === q) score += 800;
-  else if (abbrev === q) score += 750;
-  else if (fullName.startsWith(q)) score += 500;
-  else if (shortName.startsWith(q)) score += 450;
-  else if (fullName.includes(q)) score += 300;
-  else if (location.includes(q)) score += 250;
+  // 1. Check college program aliases first (e.g. "ut austin" -> "Texas Longhorns", "bama" -> "Alabama Crimson Tide")
+  const aliasHits = [
+    ...(COLLEGE_PROGRAM_ALIASES[q] || []),
+    ...(COLLEGE_PROGRAM_ALIASES[normQ] || []),
+    ...(TEAM_NICKNAMES[q] || []),
+    ...(TEAM_NICKNAMES[normQ] || []),
+  ];
 
-  // 2. Nicknames & slang aliases
-  const nicknameMatches = TEAM_NICKNAMES[q];
-  if (
-    nicknameMatches &&
-    nicknameMatches.some((n) => fullName.includes(n) || shortName.includes(n))
-  ) {
-    score += 650;
+  if (aliasHits.length > 0) {
+    for (const target of aliasHits) {
+      if (fullName === target) score += 1200;
+      else if (fullName.startsWith(target)) score += 700;
+      else if (fullName.includes(target) || location.includes(target))
+        score += 400;
+    }
   }
 
+  // 2. Direct exact & prefix matches on normalized query
+  if (fullName === normQ || fullName === q) score += 1000;
+  else if (shortName === normQ || shortName === q) score += 800;
+  else if (abbrev === normQ || abbrev === q) score += 750;
+  else if (fullName.startsWith(normQ) || fullName.startsWith(q)) score += 550;
+  else if (shortName.startsWith(normQ) || shortName.startsWith(q)) score += 480;
+  else if (fullName.includes(normQ) || fullName.includes(q)) score += 320;
+  else if (location.includes(normQ) || location.includes(q)) score += 260;
+
   // 3. City / Metro aliases
-  const cityMatches = CITY_ALIASES[q];
+  const cityMatches = [
+    ...(CITY_ALIASES[q] || []),
+    ...(CITY_ALIASES[normQ] || []),
+  ];
   if (
-    cityMatches &&
     cityMatches.some((m) => location.includes(m) || fullName.includes(m))
   ) {
     score += 550;
@@ -265,10 +464,25 @@ function scoreTeamMatch(team: Team, query: string): number {
     }
 
     // Check token aliases
-    if (TEAM_NICKNAMES[token]?.some((n) => fullName.includes(n) || shortName.includes(n))) {
+    if (
+      COLLEGE_PROGRAM_ALIASES[token]?.some(
+        (n) => fullName.includes(n) || shortName.includes(n),
+      )
+    ) {
+      tokenScore = Math.max(tokenScore, 190);
+    }
+    if (
+      TEAM_NICKNAMES[token]?.some(
+        (n) => fullName.includes(n) || shortName.includes(n),
+      )
+    ) {
       tokenScore = Math.max(tokenScore, 180);
     }
-    if (CITY_ALIASES[token]?.some((m) => location.includes(m) || fullName.includes(m))) {
+    if (
+      CITY_ALIASES[token]?.some(
+        (m) => location.includes(m) || fullName.includes(m),
+      )
+    ) {
       tokenScore = Math.max(tokenScore, 170);
     }
 
@@ -278,10 +492,9 @@ function scoreTeamMatch(team: Team, query: string): number {
       } else if (word.startsWith(token)) {
         tokenScore = Math.max(tokenScore, 100);
       } else if (token.length >= 4 && damerauLevenshtein(token, word) === 1) {
-        // 1-character typo or transposition (e.g. "cheifs" -> "chiefs")
+        // 1-character typo or transposition
         tokenScore = Math.max(tokenScore, 90);
       } else if (token.length >= 6 && damerauLevenshtein(token, word) === 2) {
-        // 2-character typo on longer terms
         tokenScore = Math.max(tokenScore, 65);
       } else if (word.includes(token)) {
         tokenScore = Math.max(tokenScore, 55);
@@ -299,7 +512,12 @@ function scoreTeamMatch(team: Team, query: string): number {
     score += 250;
   }
 
-  // League keyword bonus (e.g. "Chiefs NFL")
+  // Bonus if query indicates a university/college team
+  if (isCollege && league.includes('ncaa') && score > 0) {
+    score += 180;
+  }
+
+  // League keyword bonus (e.g. "Chiefs NFL", "Bama NCAAF")
   if (qTokens.some((t) => league.includes(t))) {
     score += 80;
   }
@@ -321,7 +539,13 @@ export async function getAllTeams(): Promise<Team[]> {
   const promises = SUPPORTED_LEAGUES.map(
     async ({ sport, league, displayName }) => {
       try {
-        const url = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/teams?limit=100`;
+        // College football has 760+ teams, college basketball has 360+ teams
+        const limit =
+          (sport === 'football' && league === 'college-football') ||
+          league === 'mens-college-basketball'
+            ? 1000
+            : 100;
+        const url = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/teams?limit=${limit}`;
         const res = await fetch(url, { next: { revalidate: 3600 } });
         if (!res.ok) return;
 

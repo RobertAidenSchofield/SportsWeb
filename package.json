@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf .next tsconfig.tsbuildinfo",
     "start": "next start",
     "lint": "next lint",
     "start-worker": "tsx worker/digest-worker.ts",

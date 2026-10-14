@@ -46,18 +46,20 @@ export function TimezoneSelector({
   };
 
   return (
-    <div className='flex items-center gap-2 text-xs'>
-      <Globe className='h-4 w-4 text-emerald-400 shrink-0' />
-      <div className='flex items-center gap-2'>
+    <div className='flex flex-wrap items-center gap-2 text-xs'>
+      <div className='flex items-center gap-1.5 shrink-0'>
+        <Globe className='h-4 w-4 text-emerald-400 shrink-0' />
         <label htmlFor='tz-select' className='text-gray-400 font-medium'>
           Digest Timezone:
         </label>
+      </div>
+      <div className='flex items-center gap-2 min-w-0 flex-1 sm:flex-initial'>
         <select
           id='tz-select'
           value={timezone}
           onChange={handleChange}
           disabled={isPending}
-          className='rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors cursor-pointer'
+          className='w-full sm:w-auto max-w-[220px] rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors cursor-pointer truncate'
         >
           {COMMON_TIMEZONES.map((tz) => (
             <option
@@ -69,15 +71,15 @@ export function TimezoneSelector({
             </option>
           ))}
         </select>
+        {isPending && (
+          <Loader2 className='h-3.5 w-3.5 animate-spin text-emerald-400 shrink-0' />
+        )}
+        {saved && (
+          <span className='flex items-center gap-1 text-[11px] text-emerald-400 shrink-0'>
+            <Check className='h-3 w-3' /> Saved
+          </span>
+        )}
       </div>
-      {isPending && (
-        <Loader2 className='h-3.5 w-3.5 animate-spin text-emerald-400' />
-      )}
-      {saved && (
-        <span className='flex items-center gap-1 text-[11px] text-emerald-400'>
-          <Check className='h-3 w-3' /> Saved
-        </span>
-      )}
     </div>
   );
 }

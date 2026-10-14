@@ -429,13 +429,13 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                           </div>
 
                           {/* Footer */}
-                          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-gray-400">
+                          <div className="mt-4 pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
                             <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
                               <Clock className="h-3.5 w-3.5" />
                               <span>{formattedTime}</span>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                               {fixture.broadcast ? (
                                 <div className="flex items-center gap-1.5 text-cyan-300 font-semibold bg-cyan-950/40 border border-cyan-500/30 px-2.5 py-1 rounded-lg">
                                   <Tv className="h-3.5 w-3.5 text-cyan-400" />

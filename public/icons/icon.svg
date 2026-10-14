@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e1726"/>
+      <stop offset="100%" stop-color="#060a12"/>
+    </linearGradient>
+    <linearGradient id="trophyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="50%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Rounded Base Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="rgba(16, 185, 129, 0.25)" stroke-width="6"/>
+  
+  <!-- Subtle circular field ring -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="rgba(16, 185, 129, 0.08)" stroke-width="40"/>
+  
+  <!-- Trophy Emblem -->
+  <g filter="url(#glow)" fill="url(#trophyGrad)" stroke="#10b981" stroke-width="2" stroke-linejoin="round">
+    <!-- Cup Body -->
+    <path d="M176 136 C176 252 232 284 256 284 C280 284 336 252 336 136 L176 136 Z" />
+    <!-- Rim -->
+    <rect x="164" y="120" width="184" height="24" rx="10" fill="#34d399" />
+    <!-- Handles -->
+    <path d="M176 148 C128 148 116 220 176 244" fill="none" stroke="url(#trophyGrad)" stroke-width="16" stroke-linecap="round" />
+    <path d="M336 148 C384 148 396 220 336 244" fill="none" stroke="url(#trophyGrad)" stroke-width="16" stroke-linecap="round" />
+    <!-- Stem -->
+    <rect x="244" y="284" width="24" height="56" rx="4" fill="#10b981" />
+    <!-- Base -->
+    <path d="M208 340 L304 340 L320 380 L192 380 Z" fill="#059669" />
+    <rect x="180" y="378" width="152" height="22" rx="6" fill="#34d399" />
+    <!-- Star accent -->
+    <polygon points="256,168 263,184 280,185 267,196 271,213 256,203 241,213 245,196 232,185 249,184" fill="#ecfdf5" />
+  </g>
+</svg>

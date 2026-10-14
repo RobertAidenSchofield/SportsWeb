@@ -147,7 +147,7 @@ export function TeamSearch({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder='Search teams (e.g. Chiefs, Lakers, Arsenal, Yankees)...'
-          className='w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-10 py-3 text-sm text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors'
+          className='w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-10 py-3 text-base sm:text-sm text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors'
         />
         {loading && (
           <Loader2 className='absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-emerald-400' />
@@ -155,14 +155,14 @@ export function TeamSearch({
       </div>
 
       {/* League Filter Pills */}
-      <div className='flex items-center gap-1.5 overflow-x-auto pb-1 text-xs'>
+      <div className='flex items-center gap-1.5 overflow-x-auto pb-1.5 text-xs -mx-1 px-1 sm:mx-0 sm:px-0'>
         {LEAGUE_TABS.map((tab) => {
           const active = selectedLeague.toLowerCase() === tab.id.toLowerCase();
           return (
             <button
               key={tab.id}
               onClick={() => setSelectedLeague(tab.id)}
-              className={`whitespace-nowrap px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`shrink-0 whitespace-nowrap px-3.5 py-2 min-h-[36px] rounded-lg font-medium active:scale-95 transition-all ${
                 active
                   ? 'bg-emerald-500 text-gray-950 font-semibold shadow-sm'
                   : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/5'
@@ -217,7 +217,7 @@ export function TeamSearch({
               <button
                 onClick={() => handleToggleFollow(team)}
                 disabled={isThisPending}
-                className={`shrink-0 ml-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`shrink-0 ml-2 sm:ml-3 flex items-center justify-center gap-1.5 px-3 py-2 min-h-[38px] rounded-lg text-xs font-semibold active:scale-95 transition-all ${
                   isFollowed
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30'
                     : 'bg-white/10 text-white hover:bg-emerald-500 hover:text-gray-950 border border-white/10'

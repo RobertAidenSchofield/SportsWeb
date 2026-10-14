@@ -77,13 +77,13 @@ export function SubscribedTeams({ teams, onUnfollow }: SubscribedTeamsProps) {
           <button
             onClick={() => handleUnfollow(team.id)}
             disabled={isPending}
-            className='mt-3 flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-400 transition-colors py-0.5 px-2 rounded hover:bg-red-500/10'
+            className='mt-3 w-full flex items-center justify-center gap-1.5 text-[11px] text-gray-400 hover:text-red-400 py-1.5 px-2 min-h-[34px] rounded-lg bg-white/[0.03] hover:bg-red-500/10 active:scale-95 transition-all'
             title='Unfollow team'
           >
             {isPending ? (
-              <Loader2 className='h-3 w-3 animate-spin' />
+              <Loader2 className='h-3.5 w-3.5 animate-spin' />
             ) : (
-              <Trash2 className='h-3 w-3' />
+              <Trash2 className='h-3.5 w-3.5' />
             )}
             <span>Remove</span>
           </button>

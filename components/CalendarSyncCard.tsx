@@ -61,7 +61,7 @@ export function CalendarSyncCard({
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-6 shadow-xl backdrop-blur-sm space-y-6">
+    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-4 sm:p-6 shadow-xl backdrop-blur-sm space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -93,7 +93,7 @@ export function CalendarSyncCard({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
           {/* Calendar Subscriptions Column */}
-          <div className="flex flex-col justify-between space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="flex flex-col justify-between space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
             <div>
               <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
                 <Calendar className="h-4 w-4" />
@@ -108,18 +108,18 @@ export function CalendarSyncCard({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
               <a
                 href={webcalUrl}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="min-h-[44px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                <Smartphone className="h-3.5 w-3.5 text-gray-300" />
+                <Smartphone className="h-4 w-4 text-gray-300" />
                 Apple / iOS / Mac
               </a>
               <a
                 href={googleCalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="min-h-[44px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                <Globe className="h-3.5 w-3.5 text-blue-400" />
+                <Globe className="h-4 w-4 text-blue-400" />
                 Google Calendar
                 <ExternalLink className="h-3 w-3 text-gray-400" />
               </a>
@@ -140,7 +140,7 @@ export function CalendarSyncCard({
                 <button
                   type="button"
                   onClick={() => copyToClipboard(calendarHttpUrl, 'calendar')}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition-colors"
+                  className="shrink-0 min-h-[38px] flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition-colors active:scale-95"
                 >
                   {copiedType === 'calendar' ? (
                     <>
@@ -159,7 +159,7 @@ export function CalendarSyncCard({
           </div>
 
           {/* Public Share & Embed Column */}
-          <div className="flex flex-col justify-between space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="flex flex-col justify-between space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
             <div>
               <div className="flex items-center gap-2 text-cyan-400 font-semibold text-sm">
                 <Share2 className="h-4 w-4" />

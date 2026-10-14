@@ -21,6 +21,9 @@ const LEAGUE_TABS = [
   { id: 'premier league', label: 'EPL' },
   { id: 'mls', label: 'MLS' },
   { id: 'ncaa football', label: 'NCAAF' },
+  { id: 'ncaa basketball', label: 'NCAAB' },
+  { id: 'la liga', label: 'La Liga' },
+  { id: 'uefa champions league', label: 'UCL' },
 ];
 
 export function TeamSearch({
@@ -32,12 +35,19 @@ export function TeamSearch({
   const [selectedLeague, setSelectedLeague] = useState('all');
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(48);
+
   // Optimistic tracking of followed team IDs
   const [optimisticFollows, setOptimisticFollows] = useState<Set<string>>(
     new Set(initialSubscribedTeamIds),
   );
   const [pendingTeamId, setPendingTeamId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Reset pagination when search query or league tab changes
+  useEffect(() => {
+    setVisibleCount(48);
+  }, [query, selectedLeague]);
 
   // Synchronize when initial list changes from parent
   useEffect(() => {
@@ -63,10 +73,18 @@ export function TeamSearch({
       } finally {
         setLoading(false);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timeoutId);
   }, [query, selectedLeague]);
+
+  // Auto-paginate more teams as user scrolls
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 300) {
+      setVisibleCount((prev) => Math.min(prev + 48, teams.length));
+    }
+  };
 
   const handleToggleFollow = async (team: Team) => {
     const isCurrentlyFollowed = optimisticFollows.has(team.id);
@@ -137,8 +155,10 @@ export function TeamSearch({
     });
   };
 
+  const visibleTeams = teams.slice(0, visibleCount);
+
   return (
-    <div className='w-full space-y-4'>
+    <div className='w-full space-y-3.5'>
       {/* Search Input */}
       <div className='relative'>
         <Search className='absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400' />
@@ -146,7 +166,7 @@ export function TeamSearch({
           type='text'
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder='Search teams (e.g. Chiefs, Lakers, Arsenal, Yankees)...'
+          placeholder='Search teams by name, city, mascot, or abbreviation (e.g. Chiefs, Pats, Warriors, SF, Man U)...'
           className='w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-10 py-3 text-base sm:text-sm text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors'
         />
         {loading && (
@@ -174,9 +194,30 @@ export function TeamSearch({
         })}
       </div>
 
-      {/* Team Results Grid */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[440px] overflow-y-auto pr-1'>
-        {teams.map((team) => {
+      {/* Results Header Count */}
+      <div className='flex items-center justify-between text-xs text-gray-400 px-0.5 pt-1'>
+        <span>
+          {loading
+            ? 'Searching teams...'
+            : query.trim()
+            ? `Found ${teams.length} ${teams.length === 1 ? 'team' : 'teams'} matching "${query.trim()}"`
+            : selectedLeague === 'all'
+            ? `Showing all ${teams.length} teams across all leagues`
+            : `Showing all ${teams.length} ${LEAGUE_TABS.find((t) => t.id === selectedLeague)?.label || selectedLeague} teams`}
+        </span>
+        {teams.length > visibleCount && (
+          <span className='text-gray-500 text-[11px]'>
+            Showing {visibleCount} of {teams.length}
+          </span>
+        )}
+      </div>
+
+      {/* Team Results Grid with Continuous Scrolling */}
+      <div
+        onScroll={handleScroll}
+        className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[540px] sm:max-h-[620px] overflow-y-auto pr-1'
+      >
+        {visibleTeams.map((team) => {
           const isFollowed = optimisticFollows.has(team.id);
           const isThisPending = pendingTeamId === team.id && isPending;
 
@@ -208,9 +249,17 @@ export function TeamSearch({
                   <p className='font-semibold text-sm text-white truncate'>
                     {team.name}
                   </p>
-                  <span className='inline-block text-[11px] font-medium text-emerald-400/90'>
-                    {team.league}
-                  </span>
+                  <div className='flex items-center gap-1.5 text-[11px] text-emerald-400/90'>
+                    <span className='font-medium'>{team.league}</span>
+                    {team.abbreviation && (
+                      <>
+                        <span className='text-gray-600'>•</span>
+                        <span className='text-gray-400 font-mono text-[10px] uppercase'>
+                          {team.abbreviation}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -242,13 +291,29 @@ export function TeamSearch({
           );
         })}
 
+        {/* Load more button at bottom if still more teams to display */}
+        {teams.length > visibleCount && (
+          <div className='col-span-full py-4 text-center'>
+            <button
+              onClick={() =>
+                setVisibleCount((prev) => Math.min(prev + 48, teams.length))
+              }
+              className='inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-all shadow-sm active:scale-95'
+            >
+              <span>
+                Load more teams ({teams.length - visibleCount} remaining)
+              </span>
+            </button>
+          </div>
+        )}
+
         {teams.length === 0 && !loading && (
           <div className='col-span-full py-10 text-center text-gray-400'>
             <p className='text-sm'>
               No teams found matching &ldquo;{query}&rdquo;
             </p>
             <p className='text-xs text-gray-500 mt-1'>
-              Try searching for a city, team mascot, or switch sports tabs.
+              Try searching by city (e.g. &ldquo;Kansas City&rdquo;), abbreviation (e.g. &ldquo;KC&rdquo;), or nickname.
             </p>
           </div>
         )}

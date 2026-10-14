@@ -4,6 +4,9 @@ export interface Team {
   sport: string;
   league: string;
   logo_url: string;
+  location?: string;
+  abbreviation?: string;
+  short_name?: string;
 }
 
 export interface UserProfile {

@@ -113,3 +113,4 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Internal calendar error', { status: 500 });
   }
 }
+

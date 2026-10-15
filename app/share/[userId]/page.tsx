@@ -2,9 +2,10 @@ import { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getSupabaseAdminClient } from '@/lib/supabaseClient';
+import { getSupabaseAdminClient, isBackendConfigured } from '@/lib/supabaseClient';
 import { getUpcomingTeamFixtures } from '@/lib/sportsApi';
 import { MatchFixture, Team, MarqueeGame, marqueeToMatchFixture } from '@/lib/types';
+import { getDemoPinnedGames } from '@/app/actions';
 import { formatInTimeZone } from 'date-fns-tz';
 import {
   Calendar,
@@ -46,30 +47,106 @@ export default async function SharePage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  const adminClient = getSupabaseAdminClient();
+  const isDemo = userId === 'demo_user' || !isBackendConfigured();
+  let userTimezone = 'America/New_York';
+  let teams: Team[] = [];
+  const pinnedGames: MarqueeGame[] = [];
 
-  // 1. Fetch user profile
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('email, timezone')
-    .eq('id', userId)
-    .single();
+  if (isDemo) {
+    teams = [
+      {
+        id: 'espn:football:nfl:12',
+        name: 'Kansas City Chiefs',
+        sport: 'football',
+        league: 'NFL',
+        logo_url: 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png',
+      },
+      {
+        id: 'espn:soccer:eng.1:359',
+        name: 'Arsenal',
+        sport: 'soccer',
+        league: 'Premier League',
+        logo_url: 'https://a.espncdn.com/i/teamlogos/soccer/500/359.png',
+      },
+    ];
+    pinnedGames.push(...(await getDemoPinnedGames()));
+  } else {
+    try {
+      const adminClient = getSupabaseAdminClient();
 
-  const userTimezone = profile?.timezone || 'America/New_York';
+      // 1. Fetch user profile
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('email, timezone')
+        .eq('id', userId)
+        .single();
 
-  // 2. Fetch followed teams
-  const { data: subscriptions, error } = await adminClient
-    .from('user_subscriptions')
-    .select('team_id, teams(id, name, sport, league, logo_url)')
-    .eq('user_id', userId);
+      if (profile?.timezone) {
+        userTimezone = profile.timezone;
+      }
 
-  if (error) {
-    console.error('Error fetching subscriptions for share page:', error);
+      // 2. Fetch user subscriptions (both followed teams and fallback pinned games)
+      const { data: subscriptions, error } = await adminClient
+        .from('user_subscriptions')
+        .select('team_id, teams(id, name, sport, league, logo_url)')
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error fetching subscriptions for share page:', error);
+      }
+
+      // Filter out 'game:' entries so they don't pollute followed teams
+      teams = (subscriptions || [])
+        .filter((s: any) => !s.team_id?.startsWith('game:') && Boolean(s.teams))
+        .map(
+          (s: any) =>
+            (Array.isArray(s.teams) ? s.teams[0] : s.teams) as Team,
+        );
+
+      // 3. Try primary pinned games table
+      let fetchedPinned = false;
+      try {
+        const { data: pinnedRows, error: pinErr } = await adminClient
+          .from('user_pinned_games')
+          .select('game_id, game_data')
+          .eq('user_id', userId);
+
+        if (!pinErr && pinnedRows && pinnedRows.length > 0) {
+          for (const r of pinnedRows) {
+            if (r.game_data) pinnedGames.push(r.game_data as MarqueeGame);
+          }
+          fetchedPinned = true;
+        }
+      } catch (err) {
+        // Table not present or query failed
+      }
+
+      // 4. Resilient Fallback: check user_subscriptions with 'game:' prefix
+      if (!fetchedPinned) {
+        const fallbackGameSubs = (subscriptions || []).filter((s: any) =>
+          s.team_id?.startsWith('game:')
+        );
+        for (const sub of fallbackGameSubs) {
+          const teamObj: any = Array.isArray(sub.teams)
+            ? sub.teams[0]
+            : sub.teams;
+          if (teamObj?.name) {
+            try {
+              const parsed = JSON.parse(teamObj.name) as MarqueeGame;
+              pinnedGames.push(parsed);
+            } catch {}
+          }
+        }
+      }
+
+      // Merge demo pinned games if demo user
+      if (userId === 'demo_user' && pinnedGames.length === 0) {
+        pinnedGames.push(...(await getDemoPinnedGames()));
+      }
+    } catch (err) {
+      console.error('Error loading data for share page:', err);
+    }
   }
-
-  const teams: Team[] = (subscriptions || [])
-    .map((s: any) => s.teams)
-    .filter((t: any): t is Team => Boolean(t));
 
   // 3. Fetch fixtures for all teams
   const allFixtures: MatchFixture[] = [];
@@ -94,26 +171,26 @@ export default async function SharePage({ params, searchParams }: PageProps) {
     }
   }
 
-  // 3b. Fetch individually pinned games for the user
-  try {
-    const { data: pinnedRows } = await adminClient
-      .from('user_pinned_games')
-      .select('game_id, game_data')
-      .eq('user_id', userId);
+  // 3b. Merge individually pinned games within 14-day schedule window
+  const nowMs = Date.now() - 4 * 3600 * 1000;
+  const maxMs = Date.now() + 14 * 24 * 3600 * 1000;
 
-    const pinnedGames: MarqueeGame[] = (pinnedRows || [])
-      .map((r: any) => r.game_data)
-      .filter(Boolean);
-
-    for (const pg of pinnedGames) {
-      const converted = marqueeToMatchFixture(pg);
+  for (const pg of pinnedGames) {
+    const converted = marqueeToMatchFixture(pg);
+    converted.isPinned = true;
+    const gameTime = new Date(converted.dateUtc).getTime();
+    if (gameTime >= nowMs && gameTime <= maxMs) {
       if (!seenIds.has(converted.id)) {
         seenIds.add(converted.id);
         allFixtures.push(converted);
+      } else {
+        // If already present from a followed team, ensure it has isPinned tag
+        const existing = allFixtures.find((x) => x.id === converted.id);
+        if (existing) {
+          existing.isPinned = true;
+        }
       }
     }
-  } catch (err) {
-    console.error('Error loading pinned games for share:', err);
   }
 
   // Sort by kickoff date
@@ -319,7 +396,12 @@ export default async function SharePage({ params, searchParams }: PageProps) {
             </h1>
             <p className="text-sm sm:text-base text-gray-300 max-w-2xl">
               Live broadcast times and match details for {teams.length}{' '}
-              {teams.length === 1 ? 'team' : 'teams'} over the next 14 days,
+              {teams.length === 1 ? 'team' : 'teams'}
+              {pinnedGames.length > 0
+                ? ` and ${pinnedGames.length} pinned ${
+                    pinnedGames.length === 1 ? 'game' : 'games'
+                  }`
+                : ''} over the next 14 days,
               synchronized with ESPN. Times shown in{' '}
               <span className="font-semibold text-emerald-400">
                 {userTimezone}
@@ -327,8 +409,8 @@ export default async function SharePage({ params, searchParams }: PageProps) {
               .
             </p>
 
-            {/* Followed Teams Pill List */}
-            {teams.length > 0 && (
+            {/* Followed Teams & Pinned Games Pill List */}
+            {(teams.length > 0 || pinnedGames.length > 0) && (
               <div className="pt-3 flex flex-wrap gap-2">
                 {teams.map((t) => (
                   <div
@@ -348,6 +430,18 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                     <span>{t.name}</span>
                     <span className="text-[10px] text-gray-400 uppercase">
                       ({t.league})
+                    </span>
+                  </div>
+                ))}
+                {pinnedGames.map((g) => (
+                  <div
+                    key={`pinned-${g.id}`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs font-medium text-amber-200"
+                  >
+                    <span>📌</span>
+                    <span>{g.shortName || g.name}</span>
+                    <span className="text-[10px] text-amber-400/80 uppercase">
+                      ({g.league})
                     </span>
                   </div>
                 ))}
@@ -376,7 +470,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                 No upcoming games scheduled
               </p>
               <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                These teams currently have no matchups scheduled over the next two
+                These teams and pinned matches currently have no matchups scheduled over the next two
                 weeks or are in off-season.
               </p>
             </div>

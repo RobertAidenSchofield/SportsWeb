@@ -5,10 +5,11 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
  * Bypasses RLS when service role key is present, and allows graceful execution if only anon key is set.
  */
 export function getSupabaseAdminClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = (
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )?.trim();
 
   if (!url || !key) {
     throw new Error(
@@ -28,8 +29,8 @@ export function getSupabaseAdminClient(): SupabaseClient {
  * Public/Anon client for general queries.
  */
 export function getSupabaseAnonClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
   if (!url || !anonKey) {
     throw new Error(

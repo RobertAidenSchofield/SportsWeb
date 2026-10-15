@@ -109,7 +109,7 @@ export function SchedulePreview({
     );
   }
 
-  if (teams.length === 0) {
+  if (teams.length === 0 && pinnedGames.length === 0) {
     return null;
   }
 
@@ -121,8 +121,8 @@ export function SchedulePreview({
           No upcoming games in the next 7 days
         </p>
         <p className='text-xs text-gray-400 mt-1'>
-          Your followed teams do not have scheduled games this week, or they are
-          in the off-season.
+          Your followed teams and pinned matches do not have scheduled games this
+          week, or they are in the off-season.
         </p>
       </div>
     );

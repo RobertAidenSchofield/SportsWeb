@@ -151,9 +151,19 @@ export function TopGamesFeed({
     startTransition(async () => {
       try {
         if (isPinned) {
-          await unpinGame(game.id);
+          const res = await unpinGame(game.id);
+          if (res && !res.success) {
+            console.error('Failed to unpin game:', res.error);
+            setPinnedIds(new Set(pinnedIds));
+            onPinToggle?.(game, isPinned);
+          }
         } else {
-          await pinGame(game);
+          const res = await pinGame(game);
+          if (res && !res.success) {
+            console.error('Failed to pin game:', res.error);
+            setPinnedIds(new Set(pinnedIds));
+            onPinToggle?.(game, isPinned);
+          }
         }
       } catch (err) {
         console.error('Failed to toggle pin game:', err);

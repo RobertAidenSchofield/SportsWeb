@@ -39,7 +39,7 @@ export async function runSportsDigestWorker() {
     const supabase = getSupabaseAdminClient();
     const { data, error } = await supabase
       .from('user_subscriptions')
-      .select('user_id, team_id, profiles(id, email, timezone)');
+      .select('user_id, team_id, teams(name), profiles(id, email, timezone)');
 
     if (error) {
       console.warn('Supabase query error:', error.message);
@@ -73,15 +73,19 @@ export async function runSportsDigestWorker() {
     return;
   }
 
-  // Extract unique team IDs
+  // Extract unique team IDs (filtering out 'game:' pinned game fallback entries)
   const uniqueTeamIds = Array.from(
-    new Set(subscriptions.map((s: any) => s.team_id)),
+    new Set(
+      subscriptions
+        .map((s: any) => s.team_id)
+        .filter((id: string) => id && !id.startsWith('game:')),
+    ),
   );
   console.log(
     `Found ${subscriptions.length} active subscription(s) across ${uniqueTeamIds.length} unique team(s).`,
   );
 
-  // Build map of user -> subscribed team IDs
+  // Build map of user -> subscribed team IDs & fallback pinned games
   const usersMap = new Map<string, UserWithSubscriptions>();
   for (const row of subscriptions) {
     const profile = (row as any).profiles;
@@ -93,14 +97,27 @@ export async function runSportsDigestWorker() {
         email: profile.email,
         timezone: profile.timezone || 'America/New_York',
         team_ids: [],
+        pinned_games: [],
       });
     }
-    usersMap.get(profile.id)!.team_ids.push(row.team_id);
+
+    const userObj = usersMap.get(profile.id)!;
+    if (row.team_id?.startsWith('game:')) {
+      // Parse fallback pinned game JSON if present
+      if (row.teams?.name) {
+        try {
+          const parsed = JSON.parse(row.teams.name) as MarqueeGame;
+          userObj.pinned_games!.push(parsed);
+        } catch {}
+      }
+    } else {
+      userObj.team_ids.push(row.team_id);
+    }
   }
 
   console.log(`Aggregating digest for ${usersMap.size} unique user(s).`);
 
-  // 1b. Query individually pinned games for users
+  // 1b. Query individually pinned games for users from primary table if available
   try {
     const supabase = getSupabaseAdminClient();
     const { data: pinnedRows } = await supabase
@@ -108,17 +125,20 @@ export async function runSportsDigestWorker() {
       .select('user_id, game_data');
 
     if (pinnedRows && pinnedRows.length > 0) {
-      console.log(`Found ${pinnedRows.length} pinned game(s) across subscribers.`);
+      console.log(`Found ${pinnedRows.length} pinned game(s) in user_pinned_games.`);
       for (const p of pinnedRows) {
         if (usersMap.has(p.user_id)) {
           const u = usersMap.get(p.user_id)!;
           if (!u.pinned_games) u.pinned_games = [];
-          u.pinned_games.push(p.game_data);
+          // Avoid duplicates if already populated from fallback
+          if (!u.pinned_games.some((g) => g.id === p.game_data?.id)) {
+            u.pinned_games.push(p.game_data);
+          }
         }
       }
     }
   } catch (err: any) {
-    // Non-fatal if table empty
+    // Non-fatal if table empty or not yet migrated
   }
 
   // 2. Fetch upcoming fixtures for all unique teams (next 7 days)

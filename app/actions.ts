@@ -37,6 +37,13 @@ let demoTimezoneStore = 'America/New_York';
 const demoPinnedGamesStore = new Map<string, MarqueeGame>();
 
 /**
+ * Returns currently pinned games from the in-memory demo store
+ */
+export async function getDemoPinnedGames(): Promise<MarqueeGame[]> {
+  return Array.from(demoPinnedGamesStore.values());
+}
+
+/**
  * Ensures the profile exists in public.profiles for the logged in Supabase user
  */
 export async function ensureUserProfile(): Promise<UserProfile | null> {
@@ -186,6 +193,10 @@ export async function followTeam(
 
     try {
       revalidatePath('/dashboard');
+      revalidatePath(`/share/${userId}`);
+      revalidatePath(`/api/calendar/${userId}`);
+      revalidatePath('/share/demo_user');
+      revalidatePath('/api/calendar/demo_user');
     } catch (e) {
       console.warn('revalidatePath non-fatal warning:', e);
     }
@@ -244,6 +255,10 @@ export async function unfollowTeam(
 
     try {
       revalidatePath('/dashboard');
+      revalidatePath(`/share/${userId}`);
+      revalidatePath(`/api/calendar/${userId}`);
+      revalidatePath('/share/demo_user');
+      revalidatePath('/api/calendar/demo_user');
     } catch (e) {
       console.warn('revalidatePath non-fatal warning:', e);
     }
@@ -341,11 +356,13 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
       return [];
     }
 
-    return (data || []).map((row: any) => ({
-      user_id: row.user_id,
-      team_id: row.team_id,
-      team: row.teams,
-    }));
+    return (data || [])
+      .filter((row: any) => !row.team_id?.startsWith('game:'))
+      .map((row: any) => ({
+        user_id: row.user_id,
+        team_id: row.team_id,
+        team: row.teams,
+      }));
   } catch (err) {
     console.error('getUserSubscriptions caught error:', err);
     return [];
@@ -378,10 +395,14 @@ export async function pinGame(
   game: MarqueeGame,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Keep in-memory store synchronized
+    demoPinnedGamesStore.set(game.id, game);
+
     if (!isBackendConfigured()) {
-      demoPinnedGamesStore.set(game.id, game);
       try {
         revalidatePath('/dashboard');
+        revalidatePath('/share/demo_user');
+        revalidatePath('/api/calendar/demo_user');
       } catch {}
       return { success: true };
     }
@@ -412,28 +433,78 @@ export async function pinGame(
       { onConflict: 'id' },
     );
 
-    // Upsert pinned game
-    const { error: pinError } = await adminClient
-      .from('user_pinned_games')
-      .upsert(
+    // 1. Attempt primary storage into public.user_pinned_games
+    let pinSuccess = false;
+    try {
+      const { error: pinError } = await adminClient
+        .from('user_pinned_games')
+        .upsert(
+          {
+            user_id: userId,
+            game_id: game.id,
+            game_data: game,
+          },
+          { onConflict: 'user_id, game_id' },
+        );
+
+      if (!pinError) {
+        pinSuccess = true;
+      } else {
+        console.warn(
+          'user_pinned_games upsert returned error, evaluating fallback:',
+          pinError,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        'user_pinned_games table unavailable, proceeding to fallback:',
+        err,
+      );
+    }
+
+    // 2. Resilient fallback: store in public.teams and public.user_subscriptions with 'game:' prefix
+    if (!pinSuccess) {
+      const { error: teamError } = await adminClient.from('teams').upsert(
         {
-          user_id: userId,
-          game_id: game.id,
-          game_data: game,
+          id: `game:${game.id}`,
+          name: JSON.stringify(game),
+          sport: game.sport || 'other',
+          league: game.league || 'PINNED',
+          logo_url: game.homeTeam?.logo || game.awayTeam?.logo || null,
         },
-        { onConflict: 'user_id, game_id' },
+        { onConflict: 'id' },
       );
 
-    if (pinError) {
-      console.error('Error pinning game:', pinError);
-      return {
-        success: false,
-        error: `Database error pinning game: ${formatSupabaseError(pinError)}`,
-      };
+      if (teamError) {
+        console.error('Fallback pin to teams table failed:', teamError);
+        return {
+          success: false,
+          error: `Database error: ${formatSupabaseError(teamError)}`,
+        };
+      }
+
+      const { error: subError } = await adminClient
+        .from('user_subscriptions')
+        .upsert(
+          { user_id: userId, team_id: `game:${game.id}` },
+          { onConflict: 'user_id, team_id' },
+        );
+
+      if (subError) {
+        console.error('Fallback pin to user_subscriptions failed:', subError);
+        return {
+          success: false,
+          error: `Database error: ${formatSupabaseError(subError)}`,
+        };
+      }
     }
 
     try {
       revalidatePath('/dashboard');
+      revalidatePath(`/share/${userId}`);
+      revalidatePath(`/api/calendar/${userId}`);
+      revalidatePath('/share/demo_user');
+      revalidatePath('/api/calendar/demo_user');
     } catch {}
 
     return { success: true };
@@ -450,10 +521,13 @@ export async function unpinGame(
   gameId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    demoPinnedGamesStore.delete(gameId);
+
     if (!isBackendConfigured()) {
-      demoPinnedGamesStore.delete(gameId);
       try {
         revalidatePath('/dashboard');
+        revalidatePath('/share/demo_user');
+        revalidatePath('/api/calendar/demo_user');
       } catch {}
       return { success: true };
     }
@@ -470,22 +544,39 @@ export async function unpinGame(
     const userId = user.id;
     const adminClient = getSupabaseAdminClient();
 
-    const { error } = await adminClient
-      .from('user_pinned_games')
-      .delete()
-      .eq('user_id', userId)
-      .eq('game_id', gameId);
+    // 1. Try deleting from user_pinned_games
+    try {
+      await adminClient
+        .from('user_pinned_games')
+        .delete()
+        .eq('user_id', userId)
+        .eq('game_id', gameId);
+    } catch (err) {
+      // table might not exist
+    }
 
-    if (error) {
-      console.error('Error unpinning game:', error);
-      return {
-        success: false,
-        error: `Database error: ${formatSupabaseError(error)}`,
-      };
+    // 2. Try deleting from user_subscriptions & teams fallback
+    try {
+      await adminClient
+        .from('user_subscriptions')
+        .delete()
+        .eq('user_id', userId)
+        .eq('team_id', `game:${gameId}`);
+
+      await adminClient
+        .from('teams')
+        .delete()
+        .eq('id', `game:${gameId}`);
+    } catch (err) {
+      // ignore
     }
 
     try {
       revalidatePath('/dashboard');
+      revalidatePath(`/share/${userId}`);
+      revalidatePath(`/api/calendar/${userId}`);
+      revalidatePath('/share/demo_user');
+      revalidatePath('/api/calendar/demo_user');
     } catch {}
 
     return { success: true };
@@ -513,27 +604,72 @@ export async function getUserPinnedGames(): Promise<MarqueeGame[]> {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return [];
+    if (!user) {
+      const demoGames = Array.from(demoPinnedGamesStore.values());
+      demoGames.sort(
+        (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
+      );
+      return demoGames;
+    }
 
     const userId = user.id;
     const adminClient = getSupabaseAdminClient();
+    const games: MarqueeGame[] = [];
+    let fetchedFromPinnedTable = false;
 
-    const { data, error } = await adminClient
-      .from('user_pinned_games')
-      .select('game_id, game_data, created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    // 1. Try public.user_pinned_games
+    try {
+      const { data, error } = await adminClient
+        .from('user_pinned_games')
+        .select('game_id, game_data, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching user pinned games:', error);
-      return [];
+      if (!error && data && data.length > 0) {
+        for (const row of data) {
+          if (row.game_data) {
+            games.push(row.game_data as MarqueeGame);
+          }
+        }
+        fetchedFromPinnedTable = true;
+      }
+    } catch (err) {
+      // table might not exist
     }
 
-    const games: MarqueeGame[] = (data || [])
-      .map((row: any) => row.game_data as MarqueeGame)
-      .filter(Boolean);
+    // 2. Fallback to public.user_subscriptions with game: prefix
+    if (!fetchedFromPinnedTable) {
+      try {
+        const { data: subData } = await adminClient
+          .from('user_subscriptions')
+          .select('team_id, teams(id, name, sport, league, logo_url)')
+          .eq('user_id', userId)
+          .like('team_id', 'game:%');
 
-    // Sort by date
+        if (subData && subData.length > 0) {
+          for (const row of subData) {
+            const teamObj: any = Array.isArray(row.teams)
+              ? row.teams[0]
+              : row.teams;
+            if (teamObj?.name) {
+              try {
+                const parsed = JSON.parse(teamObj.name) as MarqueeGame;
+                games.push(parsed);
+              } catch {}
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Fallback getUserPinnedGames query error:', err);
+      }
+    }
+
+    // If demo user or empty, include any demo pinned games as fallback
+    if (userId === 'demo_user' && games.length === 0) {
+      games.push(...Array.from(demoPinnedGamesStore.values()));
+    }
+
+    // Sort chronologically by date
     games.sort(
       (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
     );
@@ -541,6 +677,7 @@ export async function getUserPinnedGames(): Promise<MarqueeGame[]> {
     return games;
   } catch (err) {
     console.error('getUserPinnedGames caught error:', err);
-    return [];
+    return Array.from(demoPinnedGamesStore.values());
   }
 }
+

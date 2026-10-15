@@ -30,7 +30,8 @@ export function PinnedGamesSection({
   onExploreTopGames,
   onGameUnpinned,
 }: PinnedGamesSectionProps) {
-  const [pinnedGames, setPinnedGames] = useState<MarqueeGame[]>(initialPinnedGames);
+  const [pinnedGames, setPinnedGames] =
+    useState<MarqueeGame[]>(initialPinnedGames);
   const [pendingUnpinId, setPendingUnpinId] = useState<string | null>(null);
 
   const handleUnpin = async (gameId: string) => {
@@ -63,7 +64,8 @@ export function PinnedGamesSection({
             </span>
           </h2>
           <p className='text-xs text-gray-400 mt-0.5'>
-            Specific games you&apos;ve added to track on your dashboard and calendar without following the entire team.
+            Specific games you&apos;ve added to track on your dashboard and
+            calendar without following the entire team.
           </p>
         </div>
 
@@ -89,7 +91,10 @@ export function PinnedGamesSection({
               No individual games pinned yet
             </p>
             <p className='text-xs text-gray-400 max-w-md mx-auto mt-1'>
-              Want to track a marquee game like Ohio State vs Indiana or Chiefs vs Bills without following the whole team? Use the <strong>Marquee Matchups</strong> tab to add specific games directly to your schedule.
+              Want to track a marquee game like Ohio State vs Indiana or Chiefs
+              vs Bills without following the whole team? Use the{' '}
+              <strong>Marquee Matchups</strong> tab to add specific games
+              directly to your schedule.
             </p>
           </div>
           {onExploreTopGames && (
@@ -244,3 +249,4 @@ export function PinnedGamesSection({
     </section>
   );
 }
+

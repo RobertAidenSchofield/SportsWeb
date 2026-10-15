@@ -4,17 +4,12 @@ import {
   ensureUserProfile,
   getUserSubscriptions,
 } from '@/app/actions';
+import { getTopLeagueGames } from '@/lib/sportsApi';
 import { isBackendConfigured } from '@/lib/supabaseClient';
-import { TeamSearch } from '@/components/TeamSearch';
-import { SubscribedTeams } from '@/components/SubscribedTeams';
-import { SchedulePreview } from '@/components/SchedulePreview';
-import { CalendarSyncCard } from '@/components/CalendarSyncCard';
+import { DashboardTabs } from '@/components/DashboardTabs';
 import { TimezoneSelector } from '@/components/TimezoneSelector';
 import {
   Trophy,
-  CalendarDays,
-  PlusCircle,
-  Settings,
   AlertTriangle,
   ExternalLink,
 } from 'lucide-react';
@@ -51,6 +46,17 @@ export default async function DashboardPage() {
     subscriptions = await getUserSubscriptions();
   } catch (err: any) {
     console.error('getUserSubscriptions failed:', err);
+  }
+
+  let initialTopGames: any[] = [];
+  try {
+    initialTopGames = await getTopLeagueGames({
+      leagueFilter: 'all',
+      daysAhead: 7,
+      limit: 30,
+    });
+  } catch (err: any) {
+    console.error('getTopLeagueGames failed in dashboard:', err);
   }
 
   if (backendConfigured && !profile) {
@@ -115,65 +121,14 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Followed Teams Section */}
-      <section className='space-y-4'>
-        <div className='flex items-center justify-between'>
-          <div>
-            <h2 className='text-lg font-bold text-white flex items-center gap-2'>
-              <span>Your Followed Teams</span>
-              <span className='rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400 border border-emerald-500/20'>
-                {followedTeams.length}
-              </span>
-            </h2>
-            <p className='text-xs text-gray-400 mt-0.5'>
-              These teams are included in your weekly digest email.
-            </p>
-          </div>
-        </div>
-
-        <SubscribedTeams teams={followedTeams} />
-      </section>
-
-      {/* Calendar Subscription & Shareable Widget */}
-      <CalendarSyncCard
-        userId={effectiveUserId}
-        followedTeamsCount={followedTeams.length}
+      {/* Interactive Tabs (My Followed Teams vs Marquee Matchups) */}
+      <DashboardTabs
+        followedTeams={followedTeams}
+        followedTeamIds={followedTeamIds}
+        effectiveUserId={effectiveUserId}
+        userTimezone={userTimezone}
+        initialTopGames={initialTopGames}
       />
-
-      {/* 7-Day Upcoming Schedule Preview */}
-      {followedTeams.length > 0 && (
-        <section className='space-y-4'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <h2 className='text-lg font-bold text-white flex items-center gap-2'>
-                <CalendarDays className='h-5 w-5 text-emerald-400' />
-                <span>Upcoming 7-Day Schedule</span>
-              </h2>
-              <p className='text-xs text-gray-400 mt-0.5'>
-                Preview of fixtures that will be featured in your next digest.
-              </p>
-            </div>
-          </div>
-
-          <SchedulePreview teams={followedTeams} userTimezone={userTimezone} />
-        </section>
-      )}
-
-      {/* Search & Follow Teams */}
-      <section className='space-y-4 pt-4 border-t border-white/10'>
-        <div>
-          <h2 className='text-lg font-bold text-white flex items-center gap-2'>
-            <PlusCircle className='h-5 w-5 text-emerald-400' />
-            <span>Discover & Follow More Teams</span>
-          </h2>
-          <p className='text-xs text-gray-400 mt-0.5'>
-            Search across NFL, NBA, MLB, NHL, Premier League, MLS, and college
-            teams.
-          </p>
-        </div>
-
-        <TeamSearch initialSubscribedTeamIds={followedTeamIds} />
-      </section>
     </div>
   );
 }

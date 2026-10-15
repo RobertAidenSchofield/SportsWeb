@@ -7,7 +7,8 @@ import {
   isBackendConfigured,
   formatSupabaseError,
 } from '@/lib/supabaseClient';
-import { Team, UserProfile, UserSubscription } from '@/lib/types';
+import { Team, UserProfile, UserSubscription, MarqueeGame } from '@/lib/types';
+import { getTopLeagueGames } from '@/lib/sportsApi';
 
 // In-memory demo store for when Supabase is not yet configured
 const demoTeamsStore = new Map<string, Team>([
@@ -346,6 +347,25 @@ export async function getUserSubscriptions(): Promise<UserSubscription[]> {
     }));
   } catch (err) {
     console.error('getUserSubscriptions caught error:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch top marquee matchups dynamically across leagues
+ */
+export async function getTopGamesAction(
+  leagueFilter: string = 'all',
+  limit: number = 30,
+): Promise<MarqueeGame[]> {
+  try {
+    return await getTopLeagueGames({
+      leagueFilter,
+      daysAhead: 7,
+      limit,
+    });
+  } catch (err) {
+    console.error('getTopGamesAction caught error:', err);
     return [];
   }
 }

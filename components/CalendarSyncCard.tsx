@@ -11,6 +11,7 @@ import {
   Sparkles,
   Smartphone,
   Globe,
+  Flame,
 } from 'lucide-react';
 
 interface CalendarSyncCardProps {
@@ -47,6 +48,14 @@ export function CalendarSyncCard({
   const shareWebUrl = origin
     ? `${origin}/share/${userId}`
     : `/share/${userId}`;
+
+  const topGamesHttpUrl = origin
+    ? `${origin}/api/calendar/top-games`
+    : `/api/calendar/top-games`;
+
+  const topGamesWebcalUrl = origin
+    ? topGamesHttpUrl.replace(/^https?:\/\//i, 'webcal://')
+    : `webcal:///api/calendar/top-games`;
 
   const embedSnippet = `<iframe src="${shareWebUrl}?embed=true" width="100%" height="600" style="border:none; border-radius: 12px;" title="Sports Schedule"></iframe>`;
 
@@ -251,6 +260,44 @@ export function CalendarSyncCard({
           </div>
         </div>
       )}
+
+      {/* Cross-Promo: Marquee Top Games Feed */}
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+            <Flame className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-xs sm:text-sm font-bold text-white">
+              Also Available: Marquee Top Games Feed (.ics)
+            </p>
+            <p className="text-[11px] text-gray-400">
+              Sync marquee games across pro & college leagues automatically without following individual teams.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={topGamesWebcalUrl}
+            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/10 transition-colors"
+          >
+            1-Click Sync
+          </a>
+          <button
+            type="button"
+            onClick={() => copyToClipboard(topGamesHttpUrl, 'top-games-cal')}
+            className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/30 transition-colors"
+          >
+            {copiedType === 'top-games-cal' ? (
+              <span className="flex items-center gap-1 text-emerald-400">
+                <Check className="h-3 w-3" /> Copied!
+              </span>
+            ) : (
+              'Copy Link'
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

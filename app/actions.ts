@@ -34,6 +34,7 @@ const demoTeamsStore = new Map<string, Team>([
   ],
 ]);
 let demoTimezoneStore = 'America/New_York';
+const demoPinnedGamesStore = new Map<string, MarqueeGame>();
 
 /**
  * Ensures the profile exists in public.profiles for the logged in Supabase user
@@ -366,6 +367,180 @@ export async function getTopGamesAction(
     });
   } catch (err) {
     console.error('getTopGamesAction caught error:', err);
+    return [];
+  }
+}
+
+/**
+ * Pin an individual game to the user's dashboard & personal schedule without following the team
+ */
+export async function pinGame(
+  game: MarqueeGame,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!isBackendConfigured()) {
+      demoPinnedGamesStore.set(game.id, game);
+      try {
+        revalidatePath('/dashboard');
+      } catch {}
+      return { success: true };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Unauthorized: please sign in before pinning a game.',
+      };
+    }
+
+    const userId = user.id;
+    const email = user.email || `${userId}@user.local`;
+    const adminClient = getSupabaseAdminClient();
+
+    // Ensure profile exists
+    await adminClient.from('profiles').upsert(
+      {
+        id: userId,
+        email,
+        timezone: 'America/New_York',
+      },
+      { onConflict: 'id' },
+    );
+
+    // Upsert pinned game
+    const { error: pinError } = await adminClient
+      .from('user_pinned_games')
+      .upsert(
+        {
+          user_id: userId,
+          game_id: game.id,
+          game_data: game,
+        },
+        { onConflict: 'user_id, game_id' },
+      );
+
+    if (pinError) {
+      console.error('Error pinning game:', pinError);
+      return {
+        success: false,
+        error: `Database error pinning game: ${formatSupabaseError(pinError)}`,
+      };
+    }
+
+    try {
+      revalidatePath('/dashboard');
+    } catch {}
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('pinGame caught error:', err);
+    return { success: false, error: err?.message || 'Error pinning game' };
+  }
+}
+
+/**
+ * Unpin an individual game from the user's dashboard
+ */
+export async function unpinGame(
+  gameId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!isBackendConfigured()) {
+      demoPinnedGamesStore.delete(gameId);
+      try {
+        revalidatePath('/dashboard');
+      } catch {}
+      return { success: true };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const userId = user.id;
+    const adminClient = getSupabaseAdminClient();
+
+    const { error } = await adminClient
+      .from('user_pinned_games')
+      .delete()
+      .eq('user_id', userId)
+      .eq('game_id', gameId);
+
+    if (error) {
+      console.error('Error unpinning game:', error);
+      return {
+        success: false,
+        error: `Database error: ${formatSupabaseError(error)}`,
+      };
+    }
+
+    try {
+      revalidatePath('/dashboard');
+    } catch {}
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('unpinGame caught error:', err);
+    return { success: false, error: err?.message || 'Error unpinning game' };
+  }
+}
+
+/**
+ * Fetch all individually pinned games for the current user
+ */
+export async function getUserPinnedGames(): Promise<MarqueeGame[]> {
+  try {
+    if (!isBackendConfigured()) {
+      const demoGames = Array.from(demoPinnedGamesStore.values());
+      demoGames.sort(
+        (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
+      );
+      return demoGames;
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    const userId = user.id;
+    const adminClient = getSupabaseAdminClient();
+
+    const { data, error } = await adminClient
+      .from('user_pinned_games')
+      .select('game_id, game_data, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user pinned games:', error);
+      return [];
+    }
+
+    const games: MarqueeGame[] = (data || [])
+      .map((row: any) => row.game_data as MarqueeGame)
+      .filter(Boolean);
+
+    // Sort by date
+    games.sort(
+      (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
+    );
+
+    return games;
+  } catch (err) {
+    console.error('getUserPinnedGames caught error:', err);
     return [];
   }
 }

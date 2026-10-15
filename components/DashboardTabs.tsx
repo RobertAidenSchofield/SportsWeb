@@ -9,6 +9,7 @@ import {
   Star,
   Sparkles,
   ArrowRight,
+  Pin,
 } from 'lucide-react';
 import { Team, MarqueeGame } from '@/lib/types';
 import { SubscribedTeams } from '@/components/SubscribedTeams';
@@ -16,6 +17,8 @@ import { SchedulePreview } from '@/components/SchedulePreview';
 import { CalendarSyncCard } from '@/components/CalendarSyncCard';
 import { TeamSearch } from '@/components/TeamSearch';
 import { TopGamesFeed } from '@/components/TopGamesFeed';
+import { PinnedGamesSection } from '@/components/PinnedGamesSection';
+import { unpinGame } from '@/app/actions';
 
 interface DashboardTabsProps {
   followedTeams: Team[];
@@ -23,6 +26,7 @@ interface DashboardTabsProps {
   effectiveUserId: string;
   userTimezone: string;
   initialTopGames: MarqueeGame[];
+  initialPinnedGames?: MarqueeGame[];
 }
 
 export function DashboardTabs({
@@ -31,11 +35,33 @@ export function DashboardTabs({
   effectiveUserId,
   userTimezone,
   initialTopGames,
+  initialPinnedGames = [],
 }: DashboardTabsProps) {
   const [activeTab, setActiveTab] = useState<'my_teams' | 'top_games'>('my_teams');
+  const [pinnedGames, setPinnedGames] = useState<MarqueeGame[]>(initialPinnedGames);
 
   // Top 3 marquee games for quick highlight strip
   const topThreeGames = initialTopGames.slice(0, 3);
+
+  const handleUnpin = async (gameId: string) => {
+    setPinnedGames((prev) => prev.filter((g) => g.id !== gameId));
+    try {
+      await unpinGame(gameId);
+    } catch (e) {
+      console.error('Failed to unpin game:', e);
+    }
+  };
+
+  const handlePinToggle = (game: MarqueeGame, isPinned: boolean) => {
+    setPinnedGames((prev) => {
+      if (isPinned) {
+        if (prev.some((g) => g.id === game.id)) return prev;
+        return [...prev, game];
+      } else {
+        return prev.filter((g) => g.id !== game.id);
+      }
+    });
+  };
 
   return (
     <div className='space-y-8'>
@@ -52,10 +78,18 @@ export function DashboardTabs({
             }`}
           >
             <Star className='h-4 w-4 text-emerald-400' />
-            <span>My Followed Teams</span>
-            <span className='ml-1 px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white font-semibold'>
-              {followedTeams.length}
-            </span>
+            <span>My Schedule</span>
+            <div className='flex items-center gap-1 ml-1'>
+              <span className='px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white font-semibold' title='Followed Teams'>
+                {followedTeams.length} teams
+              </span>
+              {pinnedGames.length > 0 && (
+                <span className='px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-0.5' title='Pinned Individual Games'>
+                  <Pin className='h-2.5 w-2.5 rotate-45' />
+                  {pinnedGames.length}
+                </span>
+              )}
+            </div>
           </button>
 
           <button
@@ -80,13 +114,13 @@ export function DashboardTabs({
           <Sparkles className='h-3.5 w-3.5 text-emerald-400' />
           <span>
             {activeTab === 'my_teams'
-              ? 'Personalized weekly schedule and external calendar sync'
+              ? 'Personalized schedule with followed teams and pinned games'
               : 'Dynamically scored marquee games across major pro & college leagues'}
           </span>
         </div>
       </div>
 
-      {/* TAB CONTENT: MY TEAMS */}
+      {/* TAB CONTENT: MY TEAMS & PINNED GAMES */}
       {activeTab === 'my_teams' && (
         <div className='space-y-8 animate-in fade-in duration-200'>
           {/* Quick Highlight Strip: Top Games of the Week Banner */}
@@ -141,6 +175,14 @@ export function DashboardTabs({
             </div>
           )}
 
+          {/* Individually Pinned Games Section */}
+          <PinnedGamesSection
+            initialPinnedGames={pinnedGames}
+            userTimezone={userTimezone}
+            onExploreTopGames={() => setActiveTab('top_games')}
+            onGameUnpinned={handleUnpin}
+          />
+
           {/* Followed Teams Section */}
           <section className='space-y-4'>
             <div className='flex items-center justify-between'>
@@ -163,25 +205,30 @@ export function DashboardTabs({
           {/* Calendar Subscription & Shareable Widget */}
           <CalendarSyncCard
             userId={effectiveUserId}
-            followedTeamsCount={followedTeams.length}
+            followedTeamsCount={followedTeams.length + pinnedGames.length}
           />
 
-          {/* 7-Day Upcoming Schedule Preview */}
-          {followedTeams.length > 0 && (
+          {/* Unified 7-Day Upcoming Schedule Preview (Teams + Pinned Games) */}
+          {(followedTeams.length > 0 || pinnedGames.length > 0) && (
             <section className='space-y-4'>
               <div className='flex items-center justify-between'>
                 <div>
                   <h2 className='text-lg font-bold text-white flex items-center gap-2'>
                     <CalendarDays className='h-5 w-5 text-emerald-400' />
-                    <span>Upcoming 7-Day Personal Schedule</span>
+                    <span>Upcoming 7-Day Unified Schedule</span>
                   </h2>
                   <p className='text-xs text-gray-400 mt-0.5'>
-                    Preview of fixtures for your followed teams.
+                    Fixtures for your followed teams and bookmarked individual games.
                   </p>
                 </div>
               </div>
 
-              <SchedulePreview teams={followedTeams} userTimezone={userTimezone} />
+              <SchedulePreview
+                teams={followedTeams}
+                userTimezone={userTimezone}
+                pinnedGames={pinnedGames}
+                onUnpinGame={handleUnpin}
+              />
             </section>
           )}
 
@@ -208,11 +255,12 @@ export function DashboardTabs({
           <TopGamesFeed
             initialGames={initialTopGames}
             initialFollowedTeamIds={followedTeamIds}
+            initialPinnedGameIds={pinnedGames.map((g) => g.id)}
             userTimezone={userTimezone}
+            onPinToggle={handlePinToggle}
           />
         </div>
       )}
     </div>
   );
 }
-

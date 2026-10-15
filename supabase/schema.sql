@@ -26,16 +26,27 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
   PRIMARY KEY (user_id, team_id)
 );
 
--- 4. Grant Table Permissions to Supabase API Roles
+-- 4. User Pinned Games (Individual Game-by-Game Tracking)
+CREATE TABLE IF NOT EXISTS public.user_pinned_games (
+  user_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  game_id TEXT NOT NULL,
+  game_data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, game_id)
+);
+
+-- 5. Grant Table Permissions to Supabase API Roles
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.profiles TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.teams TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.user_subscriptions TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.user_pinned_games TO anon, authenticated, service_role;
 
--- 5. Enable Row Level Security (RLS)
+-- 6. Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_pinned_games ENABLE ROW LEVEL SECURITY;
 
 -- 6. Profiles Policies
 DROP POLICY IF EXISTS "Anyone can read profiles" ON public.profiles;
@@ -79,7 +90,13 @@ CREATE POLICY "Anyone can manage subscriptions"
 ON public.user_subscriptions
 FOR ALL USING (true) WITH CHECK (true);
 
--- 9. Automatic Profile Creation Trigger on Auth Signup
+-- 9. User Pinned Games Policies
+DROP POLICY IF EXISTS "Anyone can manage pinned games" ON public.user_pinned_games;
+CREATE POLICY "Anyone can manage pinned games"
+ON public.user_pinned_games
+FOR ALL USING (true) WITH CHECK (true);
+
+-- 10. Automatic Profile Creation Trigger on Auth Signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN

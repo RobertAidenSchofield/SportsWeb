@@ -7,11 +7,12 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { addDays, format } from 'date-fns';
 import { getSupabaseAdminClient } from '../lib/supabaseClient';
 import { getUpcomingTeamFixtures } from '../lib/sportsApi';
-import { MatchFixture, UserProfile } from '../lib/types';
+import { MatchFixture, UserProfile, MarqueeGame, marqueeToMatchFixture } from '../lib/types';
 import { DigestEmail } from '../emails/DigestEmail';
 
 interface UserWithSubscriptions extends UserProfile {
   team_ids: string[];
+  pinned_games?: MarqueeGame[];
 }
 
 const isDryRun = process.argv.includes('--dry-run');
@@ -99,6 +100,27 @@ export async function runSportsDigestWorker() {
 
   console.log(`Aggregating digest for ${usersMap.size} unique user(s).`);
 
+  // 1b. Query individually pinned games for users
+  try {
+    const supabase = getSupabaseAdminClient();
+    const { data: pinnedRows } = await supabase
+      .from('user_pinned_games')
+      .select('user_id, game_data');
+
+    if (pinnedRows && pinnedRows.length > 0) {
+      console.log(`Found ${pinnedRows.length} pinned game(s) across subscribers.`);
+      for (const p of pinnedRows) {
+        if (usersMap.has(p.user_id)) {
+          const u = usersMap.get(p.user_id)!;
+          if (!u.pinned_games) u.pinned_games = [];
+          u.pinned_games.push(p.game_data);
+        }
+      }
+    }
+  } catch (err: any) {
+    // Non-fatal if table empty
+  }
+
   // 2. Fetch upcoming fixtures for all unique teams (next 7 days)
   console.log(
     '\n[Step 2] Fetching upcoming 7-day fixtures for unique teams from sports API...',
@@ -141,6 +163,17 @@ export async function runSportsDigestWorker() {
     for (const teamId of user.team_ids) {
       const fixtures = teamFixturesMap.get(teamId) || [];
       userFixtures.push(...fixtures);
+    }
+
+    // Collect individually pinned games (next 7 days)
+    const nowMs = Date.now() - 3.5 * 3600 * 1000;
+    const maxMs = Date.now() + 7 * 24 * 3600 * 1000;
+    for (const pg of user.pinned_games || []) {
+      const converted = marqueeToMatchFixture(pg);
+      const gameTime = new Date(converted.dateUtc).getTime();
+      if (gameTime >= nowMs && gameTime <= maxMs) {
+        userFixtures.push(converted);
+      }
     }
 
     // Deduplicate any matches where both teams are followed by the user

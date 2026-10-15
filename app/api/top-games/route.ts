@@ -8,12 +8,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const league = searchParams.get('league') || 'all';
     const limitStr = searchParams.get('limit');
-    const limit = limitStr ? parseInt(limitStr, 10) : 30;
+    const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
     const games = await getTopLeagueGames({
       leagueFilter: league,
       daysAhead: 7,
-      limit: isNaN(limit) ? 30 : Math.min(limit, 50),
+      limit: isNaN(limit) ? 50 : Math.min(limit, 100),
     });
 
     return NextResponse.json(

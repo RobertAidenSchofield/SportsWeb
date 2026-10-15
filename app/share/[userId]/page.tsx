@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdminClient } from '@/lib/supabaseClient';
 import { getUpcomingTeamFixtures } from '@/lib/sportsApi';
-import { MatchFixture, Team } from '@/lib/types';
+import { MatchFixture, Team, MarqueeGame, marqueeToMatchFixture } from '@/lib/types';
 import { formatInTimeZone } from 'date-fns-tz';
 import {
   Calendar,
@@ -92,6 +92,28 @@ export default async function SharePage({ params, searchParams }: PageProps) {
       seenIds.add(f.id);
       allFixtures.push(f);
     }
+  }
+
+  // 3b. Fetch individually pinned games for the user
+  try {
+    const { data: pinnedRows } = await adminClient
+      .from('user_pinned_games')
+      .select('game_id, game_data')
+      .eq('user_id', userId);
+
+    const pinnedGames: MarqueeGame[] = (pinnedRows || [])
+      .map((r: any) => r.game_data)
+      .filter(Boolean);
+
+    for (const pg of pinnedGames) {
+      const converted = marqueeToMatchFixture(pg);
+      if (!seenIds.has(converted.id)) {
+        seenIds.add(converted.id);
+        allFixtures.push(converted);
+      }
+    }
+  } catch (err) {
+    console.error('Error loading pinned games for share:', err);
   }
 
   // Sort by kickoff date
@@ -225,6 +247,11 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                               <span className="flex items-center gap-1 text-gray-500 text-[10px]">
                                 <Tv className="h-3 w-3 text-gray-600" />
                                 TV TBA
+                              </span>
+                            )}
+                            {fixture.isPinned && (
+                              <span className="text-[10px] font-semibold bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                📌 Pinned
                               </span>
                             )}
                             <span className="text-[10px] uppercase bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
@@ -446,6 +473,11 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                                   <Tv className="h-3.5 w-3.5 text-gray-600" />
                                   <span>TV TBA</span>
                                 </div>
+                              )}
+                              {fixture.isPinned && (
+                                <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300 border border-amber-500/30 font-semibold uppercase">
+                                  📌 Pinned
+                                </span>
                               )}
                               <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] text-gray-400 border border-white/5 uppercase">
                                 {fixture.league}

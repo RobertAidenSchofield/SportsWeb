@@ -17,15 +17,20 @@ import {
   ExternalLink,
   ShieldCheck,
   Dices,
+  Pin,
+  Search,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { MarqueeGame, Team } from '@/lib/types';
-import { followTeam, unfollowTeam } from '@/app/actions';
+import { followTeam, unfollowTeam, pinGame, unpinGame } from '@/app/actions';
 import { formatInTimeZone } from 'date-fns-tz';
 
 interface TopGamesFeedProps {
   initialGames: MarqueeGame[];
   initialFollowedTeamIds: string[];
+  initialPinnedGameIds?: string[];
   userTimezone?: string;
+  onPinToggle?: (game: MarqueeGame, isPinned: boolean) => void;
 }
 
 const LEAGUE_TABS = [
@@ -42,7 +47,9 @@ const LEAGUE_TABS = [
 export function TopGamesFeed({
   initialGames,
   initialFollowedTeamIds,
+  initialPinnedGameIds = [],
   userTimezone = 'America/New_York',
+  onPinToggle,
 }: TopGamesFeedProps) {
   const [selectedLeague, setSelectedLeague] = useState('all');
   const [games, setGames] = useState<MarqueeGame[]>(initialGames);
@@ -50,7 +57,13 @@ export function TopGamesFeed({
   const [followedIds, setFollowedIds] = useState<Set<string>>(
     new Set(initialFollowedTeamIds),
   );
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(
+    new Set(initialPinnedGameIds),
+  );
   const [pendingTeamId, setPendingTeamId] = useState<string | null>(null);
+  const [pendingPinGameId, setPendingPinGameId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'marquee'>('all');
   const [showCalModal, setShowCalModal] = useState(false);
   const [copiedCal, setCopiedCal] = useState(false);
   const [, startTransition] = useTransition();
@@ -60,7 +73,9 @@ export function TopGamesFeed({
     setSelectedLeague(leagueId);
     setLoading(true);
     try {
-      const res = await fetch(`/api/top-games?league=${encodeURIComponent(leagueId)}&limit=35`);
+      const res = await fetch(
+        `/api/top-games?league=${encodeURIComponent(leagueId)}&limit=50`,
+      );
       if (res.ok) {
         const data = await res.json();
         setGames(data.games || []);
@@ -72,7 +87,7 @@ export function TopGamesFeed({
     }
   };
 
-  // Toggle follow team directly from top games feed
+  // Toggle follow whole team
   const handleToggleFollow = async (
     teamData: {
       id: string;
@@ -118,6 +133,39 @@ export function TopGamesFeed({
     });
   };
 
+  // Toggle pin individual game to dashboard
+  const handleTogglePin = async (game: MarqueeGame) => {
+    const isPinned = pinnedIds.has(game.id);
+    setPendingPinGameId(game.id);
+
+    // Optimistic UI
+    const updated = new Set(pinnedIds);
+    if (isPinned) {
+      updated.delete(game.id);
+    } else {
+      updated.add(game.id);
+    }
+    setPinnedIds(updated);
+    onPinToggle?.(game, !isPinned);
+
+    startTransition(async () => {
+      try {
+        if (isPinned) {
+          await unpinGame(game.id);
+        } else {
+          await pinGame(game);
+        }
+      } catch (err) {
+        console.error('Failed to toggle pin game:', err);
+        // Rollback
+        setPinnedIds(new Set(pinnedIds));
+        onPinToggle?.(game, isPinned);
+      } finally {
+        setPendingPinGameId(null);
+      }
+    });
+  };
+
   const calendarFeedUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/api/calendar/top-games?league=${selectedLeague}`
@@ -135,6 +183,37 @@ export function TopGamesFeed({
     }
   };
 
+  // Filter games based on search query and filterMode
+  const filteredGames = games.filter((game) => {
+    // Score filter
+    if (filterMode === 'marquee' && game.excitementScore < 65) {
+      return false;
+    }
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = game.name.toLowerCase().includes(q);
+      const matchHome = game.homeTeam.name.toLowerCase().includes(q);
+      const matchAway = game.awayTeam.name.toLowerCase().includes(q);
+      const matchVenue = (game.venue || '').toLowerCase().includes(q);
+      const matchLeague = game.league.toLowerCase().includes(q);
+      const matchTags = game.highlightTags.some((t) =>
+        t.toLowerCase().includes(q),
+      );
+      return (
+        matchName ||
+        matchHome ||
+        matchAway ||
+        matchVenue ||
+        matchLeague ||
+        matchTags
+      );
+    }
+
+    return true;
+  });
+
   return (
     <div className='space-y-6'>
       {/* Feed Controls Header */}
@@ -145,11 +224,11 @@ export function TopGamesFeed({
               <Flame className='h-5 w-5' />
             </span>
             <h2 className='text-lg sm:text-xl font-bold text-white'>
-              Marquee Matchups & Top Games
+              Marquee Matchups & League Games
             </h2>
           </div>
           <p className='text-xs sm:text-sm text-gray-400 mt-1 max-w-2xl'>
-            Dynamically curated based on AP Top 25 rankings, national TV broadcasts, close betting spreads, and classic rivalries.
+            Add specific games directly to your personal schedule, or follow entire teams. Dynamically curated with TV channels and excitement ratings.
           </p>
         </div>
 
@@ -182,6 +261,56 @@ export function TopGamesFeed({
             </button>
           );
         })}
+      </div>
+
+      {/* Search Bar & Tier Filter Row */}
+      <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white/[0.02] p-2 rounded-2xl border border-white/10'>
+        {/* Search Input */}
+        <div className='relative flex-1'>
+          <Search className='absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none' />
+          <input
+            type='text'
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder='Search any matchup, team, or venue (e.g. "Ohio State", "Chiefs", "Lakers", "Memorial Stadium")...'
+            className='w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-2 text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 transition-colors'
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className='absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-white'
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* View Mode Filter: All Games vs Marquee (65+ only) */}
+        <div className='flex items-center gap-1.5 self-end sm:self-auto shrink-0 bg-white/5 p-1 rounded-xl border border-white/10'>
+          <button
+            type='button'
+            onClick={() => setFilterMode('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              filterMode === 'all'
+                ? 'bg-white/10 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            All Games ({games.length})
+          </button>
+          <button
+            type='button'
+            onClick={() => setFilterMode('marquee')}
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              filterMode === 'marquee'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Flame className='h-3 w-3 text-amber-400' />
+            <span>Marquee Only</span>
+          </button>
+        </div>
       </div>
 
       {/* Calendar Subscription Modal */}
@@ -273,24 +402,37 @@ export function TopGamesFeed({
             Scanning scoreboards and calculating excitement indices...
           </span>
         </div>
-      ) : games.length === 0 ? (
+      ) : filteredGames.length === 0 ? (
         <div className='rounded-2xl border border-white/10 p-8 text-center bg-white/[0.02] space-y-2'>
           <Flame className='mx-auto h-8 w-8 text-gray-500/60' />
           <p className='text-base font-semibold text-white'>
-            No active marquee games found for this league
+            {searchQuery
+              ? `No games matching "${searchQuery}"`
+              : 'No games found for this filter'}
           </p>
           <p className='text-xs text-gray-400 max-w-md mx-auto'>
-            This league may be currently in its off-season, or upcoming games have not yet been posted to the schedule.
+            {searchQuery
+              ? 'Try searching by team city, university name, or switch to "All Leagues".'
+              : 'This league may currently be in its off-season, or games are not yet posted.'}
           </p>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className='mt-2 inline-flex items-center px-3 py-1.5 rounded-lg bg-white/10 text-xs font-semibold text-white hover:bg-white/15 transition-colors'
+            >
+              Clear Search
+            </button>
+          )}
         </div>
       ) : (
         /* Games Grid */
         <div className='grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5'>
-          {games.map((game) => {
+          {filteredGames.map((game) => {
             // Determine tier badges and styling
             let tierBadgeColor = 'bg-blue-500/10 text-blue-300 border-blue-500/20';
             let tierLabel = 'Featured';
-            let cardGlow = 'border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01]';
+            let cardGlow =
+              'border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01]';
 
             if (game.tier === 'ultra') {
               tierBadgeColor =
@@ -320,15 +462,20 @@ export function TopGamesFeed({
 
             const isHomeFollowed = followedIds.has(game.homeTeam.id);
             const isAwayFollowed = followedIds.has(game.awayTeam.id);
+            const isPinned = pinnedIds.has(game.id);
 
             return (
               <div
                 key={game.id}
-                className={`rounded-2xl border p-4 sm:p-5 transition-all duration-200 hover:border-white/20 flex flex-col justify-between space-y-4 ${cardGlow}`}
+                className={`rounded-2xl border p-4 sm:p-5 transition-all duration-200 hover:border-white/20 flex flex-col justify-between space-y-4 ${
+                  isPinned
+                    ? 'border-amber-500/40 bg-gradient-to-br from-amber-950/25 via-white/[0.03] to-transparent shadow-md shadow-amber-950/20'
+                    : cardGlow
+                }`}
               >
-                {/* Card Header: League + Excitement Score + Kickoff */}
-                <div className='flex items-start justify-between gap-3 border-b border-white/5 pb-3'>
-                  <div className='space-y-1'>
+                {/* Card Header: League + Excitement Score + Game-by-Game Pin Button */}
+                <div className='flex items-start justify-between gap-2.5 border-b border-white/5 pb-3'>
+                  <div className='space-y-1 min-w-0'>
                     <div className='flex items-center gap-2 flex-wrap'>
                       <span className='px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-white uppercase tracking-wider'>
                         {game.league}
@@ -343,6 +490,14 @@ export function TopGamesFeed({
                           {game.excitementScore}/100 • {tierLabel}
                         </span>
                       </span>
+
+                      {/* Broadcast Badge */}
+                      {game.broadcastSummary && (
+                        <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px] font-semibold'>
+                          <Tv className='h-3 w-3 text-emerald-400' />
+                          <span>{game.broadcastSummary}</span>
+                        </span>
+                      )}
                     </div>
 
                     <p className='text-xs text-gray-400 font-medium flex items-center gap-1.5 pt-0.5'>
@@ -351,13 +506,36 @@ export function TopGamesFeed({
                     </p>
                   </div>
 
-                  {/* Broadcast Badge */}
-                  {game.broadcastSummary && (
-                    <span className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-semibold shrink-0'>
-                      <Tv className='h-3.5 w-3.5 text-emerald-400' />
-                      <span>{game.broadcastSummary}</span>
-                    </span>
-                  )}
+                  {/* 📌 Game-by-Game Pin Button (Add this specific game to dashboard without following team) */}
+                  <button
+                    type='button'
+                    onClick={() => handleTogglePin(game)}
+                    disabled={pendingPinGameId === game.id}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
+                      isPinned
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+                        : 'bg-white/5 hover:bg-amber-500/15 border-white/10 hover:border-amber-500/30 text-gray-300 hover:text-amber-300'
+                    }`}
+                    title={
+                      isPinned
+                        ? 'Remove this specific game from your dashboard'
+                        : 'Add this specific game to your personal schedule & dashboard'
+                    }
+                  >
+                    {pendingPinGameId === game.id ? (
+                      <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                    ) : isPinned ? (
+                      <>
+                        <Pin className='h-3.5 w-3.5 text-amber-400 rotate-45' />
+                        <span>Pinned</span>
+                      </>
+                    ) : (
+                      <>
+                        <Pin className='h-3.5 w-3.5 rotate-45' />
+                        <span>+ Pin Game</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Matchup Teams Row */}
@@ -393,7 +571,7 @@ export function TopGamesFeed({
                       </div>
                     </div>
 
-                    {/* Quick Follow Away */}
+                    {/* Quick Follow Away Team */}
                     <button
                       onClick={() =>
                         handleToggleFollow(
@@ -408,6 +586,11 @@ export function TopGamesFeed({
                           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                           : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-white'
                       }`}
+                      title={
+                        isAwayFollowed
+                          ? 'Following team in weekly digest'
+                          : 'Follow entire team'
+                      }
                     >
                       {pendingTeamId === game.awayTeam.id ? (
                         <Loader2 className='h-3.5 w-3.5 animate-spin' />
@@ -419,7 +602,7 @@ export function TopGamesFeed({
                       ) : (
                         <>
                           <Plus className='h-3.5 w-3.5' />
-                          <span>Follow</span>
+                          <span>Follow Team</span>
                         </>
                       )}
                     </button>
@@ -456,7 +639,7 @@ export function TopGamesFeed({
                       </div>
                     </div>
 
-                    {/* Quick Follow Home */}
+                    {/* Quick Follow Home Team */}
                     <button
                       onClick={() =>
                         handleToggleFollow(
@@ -471,6 +654,11 @@ export function TopGamesFeed({
                           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                           : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-white'
                       }`}
+                      title={
+                        isHomeFollowed
+                          ? 'Following team in weekly digest'
+                          : 'Follow entire team'
+                      }
                     >
                       {pendingTeamId === game.homeTeam.id ? (
                         <Loader2 className='h-3.5 w-3.5 animate-spin' />
@@ -482,7 +670,7 @@ export function TopGamesFeed({
                       ) : (
                         <>
                           <Plus className='h-3.5 w-3.5' />
-                          <span>Follow</span>
+                          <span>Follow Team</span>
                         </>
                       )}
                     </button>
@@ -538,4 +726,3 @@ export function TopGamesFeed({
     </div>
   );
 }
-

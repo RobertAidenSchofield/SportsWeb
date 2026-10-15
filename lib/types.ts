@@ -37,6 +37,17 @@ export interface MatchFixture {
   broadcast?: string; // e.g. "ESPN", "FOX", "CBS"
   venue?: string;
   status?: string; // "scheduled", "in_progress", "final"
+  isPinned?: boolean; // Pinned individually by user
+  excitementScore?: number;
+  highlightTags?: string[];
+  oddsDetails?: string;
+}
+
+export interface UserPinnedGame {
+  user_id: string;
+  game_id: string;
+  game_data: MarqueeGame;
+  created_at?: string;
 }
 
 export interface UserDigestData {
@@ -80,5 +91,30 @@ export interface MarqueeGame {
   tier: ExcitementTier; // 'ultra' (90+), 'high' (78+), 'featured' (65+), 'standard'
   highlightTags: string[]; // ["🔥 #4 vs #5 Top 10", "📺 National TV: Fox", "⚡ Spread: 3.5"]
   isRivalry?: boolean;
+}
+
+/**
+ * Transforms a MarqueeGame into a MatchFixture for unified schedule preview & calendar export
+ */
+export function marqueeToMatchFixture(game: MarqueeGame): MatchFixture {
+  return {
+    id: game.id,
+    teamId: game.homeTeam.id,
+    teamName: game.homeTeam.name,
+    teamLogo: game.homeTeam.logo,
+    opponentName: game.awayTeam.name,
+    opponentLogo: game.awayTeam.logo,
+    isHome: true,
+    sport: game.sport,
+    league: game.league,
+    dateUtc: game.dateUtc,
+    broadcast: game.broadcastSummary,
+    venue: game.venue,
+    status: 'scheduled',
+    isPinned: true,
+    excitementScore: game.excitementScore,
+    highlightTags: game.highlightTags,
+    oddsDetails: game.odds?.details,
+  };
 }
 

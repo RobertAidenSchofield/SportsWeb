@@ -1,0 +1,246 @@
+'use client';
+
+import { useState } from 'react';
+import Image from 'next/image';
+import {
+  Pin,
+  Calendar,
+  Clock,
+  Tv,
+  Dices,
+  Trash2,
+  Loader2,
+  Flame,
+  ArrowRight,
+} from 'lucide-react';
+import { MarqueeGame } from '@/lib/types';
+import { unpinGame } from '@/app/actions';
+import { formatInTimeZone } from 'date-fns-tz';
+
+interface PinnedGamesSectionProps {
+  initialPinnedGames: MarqueeGame[];
+  userTimezone: string;
+  onExploreTopGames?: () => void;
+  onGameUnpinned?: (gameId: string) => void;
+}
+
+export function PinnedGamesSection({
+  initialPinnedGames,
+  userTimezone,
+  onExploreTopGames,
+  onGameUnpinned,
+}: PinnedGamesSectionProps) {
+  const [pinnedGames, setPinnedGames] = useState<MarqueeGame[]>(initialPinnedGames);
+  const [pendingUnpinId, setPendingUnpinId] = useState<string | null>(null);
+
+  const handleUnpin = async (gameId: string) => {
+    setPendingUnpinId(gameId);
+    // Optimistic UI removal
+    const remaining = pinnedGames.filter((g) => g.id !== gameId);
+    setPinnedGames(remaining);
+    onGameUnpinned?.(gameId);
+
+    try {
+      await unpinGame(gameId);
+    } catch (err) {
+      console.error('Failed to unpin game:', err);
+      // Rollback
+      setPinnedGames(initialPinnedGames);
+    } finally {
+      setPendingUnpinId(null);
+    }
+  };
+
+  return (
+    <section className='space-y-4'>
+      <div className='flex items-center justify-between'>
+        <div>
+          <h2 className='text-lg font-bold text-white flex items-center gap-2'>
+            <Pin className='h-5 w-5 text-amber-400 rotate-45' />
+            <span>Your Pinned Games</span>
+            <span className='rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-400 border border-amber-500/20'>
+              {pinnedGames.length}
+            </span>
+          </h2>
+          <p className='text-xs text-gray-400 mt-0.5'>
+            Specific games you&apos;ve added to track on your dashboard and calendar without following the entire team.
+          </p>
+        </div>
+
+        {onExploreTopGames && (
+          <button
+            type='button'
+            onClick={onExploreTopGames}
+            className='text-xs font-semibold text-amber-300 hover:text-amber-200 flex items-center gap-1 transition-colors'
+          >
+            <span>+ Find More Games</span>
+            <ArrowRight className='h-3.5 w-3.5' />
+          </button>
+        )}
+      </div>
+
+      {pinnedGames.length === 0 ? (
+        <div className='rounded-2xl border border-dashed border-white/10 p-6 text-center bg-white/[0.02] space-y-3'>
+          <div className='mx-auto h-10 w-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400'>
+            <Pin className='h-5 w-5 rotate-45' />
+          </div>
+          <div>
+            <p className='text-sm font-semibold text-white'>
+              No individual games pinned yet
+            </p>
+            <p className='text-xs text-gray-400 max-w-md mx-auto mt-1'>
+              Want to track a marquee game like Ohio State vs Indiana or Chiefs vs Bills without following the whole team? Use the <strong>Marquee Matchups</strong> tab to add specific games directly to your schedule.
+            </p>
+          </div>
+          {onExploreTopGames && (
+            <button
+              onClick={onExploreTopGames}
+              className='inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs transition-colors'
+            >
+              <Flame className='h-3.5 w-3.5 text-amber-400' />
+              <span>Browse Marquee Games</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          {pinnedGames.map((game) => {
+            let formattedKickoff = 'Upcoming';
+            try {
+              formattedKickoff = formatInTimeZone(
+                new Date(game.dateUtc),
+                userTimezone,
+                'EEE, MMM d • h:mm a zzz',
+              );
+            } catch {
+              formattedKickoff = new Date(game.dateUtc).toLocaleString();
+            }
+
+            return (
+              <div
+                key={game.id}
+                className='rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/20 via-white/[0.03] to-transparent p-4 sm:p-5 flex flex-col justify-between space-y-3.5 transition-all hover:border-amber-500/40'
+              >
+                {/* Header */}
+                <div className='flex items-start justify-between gap-3 border-b border-white/5 pb-2.5'>
+                  <div className='space-y-0.5'>
+                    <div className='flex items-center gap-2 flex-wrap'>
+                      <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white uppercase tracking-wider'>
+                        {game.league}
+                      </span>
+                      <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30'>
+                        <Flame className='h-3 w-3 text-amber-400' />
+                        <span>{game.excitementScore}/100</span>
+                      </span>
+                    </div>
+                    <p className='text-xs text-gray-400 font-medium flex items-center gap-1.5 pt-1'>
+                      <Calendar className='h-3.5 w-3.5 text-gray-500' />
+                      <span>{formattedKickoff}</span>
+                    </p>
+                  </div>
+
+                  {/* Remove Button */}
+                  <button
+                    type='button'
+                    onClick={() => handleUnpin(game.id)}
+                    disabled={pendingUnpinId === game.id}
+                    className='inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-400 hover:text-rose-300 bg-white/5 hover:bg-rose-500/10 border border-white/10 hover:border-rose-500/20 transition-colors shrink-0'
+                    title='Remove game from dashboard'
+                  >
+                    {pendingUnpinId === game.id ? (
+                      <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                    ) : (
+                      <>
+                        <Trash2 className='h-3.5 w-3.5' />
+                        <span>Remove</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Matchup */}
+                <div className='space-y-2 py-0.5'>
+                  {/* Away */}
+                  <div className='flex items-center justify-between gap-2.5'>
+                    <div className='flex items-center gap-2.5 min-w-0'>
+                      <div className='relative h-8 w-8 shrink-0 bg-white/5 rounded-full p-1 border border-white/10'>
+                        <Image
+                          src={game.awayTeam.logo}
+                          alt={game.awayTeam.name}
+                          fill
+                          className='object-contain p-0.5'
+                          unoptimized
+                        />
+                      </div>
+                      <div className='min-w-0'>
+                        <span className='font-bold text-white text-sm truncate block'>
+                          {game.awayTeam.rank ? `#${game.awayTeam.rank} ` : ''}
+                          {game.awayTeam.name}
+                        </span>
+                        {game.awayTeam.record && (
+                          <span className='text-[11px] text-gray-400'>
+                            {game.awayTeam.record} • Away
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Home */}
+                  <div className='flex items-center justify-between gap-2.5'>
+                    <div className='flex items-center gap-2.5 min-w-0'>
+                      <div className='relative h-8 w-8 shrink-0 bg-white/5 rounded-full p-1 border border-white/10'>
+                        <Image
+                          src={game.homeTeam.logo}
+                          alt={game.homeTeam.name}
+                          fill
+                          className='object-contain p-0.5'
+                          unoptimized
+                        />
+                      </div>
+                      <div className='min-w-0'>
+                        <span className='font-bold text-white text-sm truncate block'>
+                          {game.homeTeam.rank ? `#${game.homeTeam.rank} ` : ''}
+                          {game.homeTeam.name}
+                        </span>
+                        {game.homeTeam.record && (
+                          <span className='text-[11px] text-gray-400'>
+                            {game.homeTeam.record} • Home
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Metadata */}
+                <div className='border-t border-white/5 pt-2.5 flex items-center justify-between text-[11px] text-gray-400'>
+                  {game.broadcastSummary ? (
+                    <span className='inline-flex items-center gap-1 text-emerald-400 font-semibold'>
+                      <Tv className='h-3 w-3' />
+                      <span>{game.broadcastSummary}</span>
+                    </span>
+                  ) : (
+                    <span className='text-gray-500'>TV TBA</span>
+                  )}
+
+                  {game.odds?.details && (
+                    <span className='font-mono text-cyan-300/80'>
+                      🎲 {game.odds.details}
+                    </span>
+                  )}
+
+                  {game.venue && (
+                    <span className='truncate max-w-[130px] text-gray-400'>
+                      📍 {game.venue}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

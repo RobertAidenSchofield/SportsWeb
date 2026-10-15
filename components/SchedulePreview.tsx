@@ -2,16 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Calendar, Tv, Clock, AlertCircle, Loader2 } from 'lucide-react';
-import { MatchFixture, Team } from '@/lib/types';
+import { Calendar, Tv, Clock, AlertCircle, Loader2, Pin, X } from 'lucide-react';
+import { MatchFixture, Team, MarqueeGame, marqueeToMatchFixture } from '@/lib/types';
 import { formatInTimeZone } from 'date-fns-tz';
 
 interface SchedulePreviewProps {
   teams: Team[];
   userTimezone: string;
+  pinnedGames?: MarqueeGame[];
+  onUnpinGame?: (gameId: string) => void;
 }
 
-export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
+export function SchedulePreview({
+  teams,
+  userTimezone,
+  pinnedGames = [],
+  onUnpinGame,
+}: SchedulePreviewProps) {
   const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +26,7 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
     let isCancelled = false;
 
     async function loadSchedule() {
-      if (teams.length === 0) {
+      if (teams.length === 0 && pinnedGames.length === 0) {
         setFixtures([]);
         setLoading(false);
         return;
@@ -45,13 +52,35 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
 
         const nested = await Promise.all(fixturePromises);
         if (!isCancelled) {
-          // Flatten and sort by kickoff date
+          // Flatten followed teams fixtures
           const all = nested.flat();
-          all.sort(
+
+          // Merge pinned individual games (next 7 days)
+          const nowMs = Date.now() - 3.5 * 3600 * 1000;
+          const maxMs = Date.now() + 7 * 24 * 3600 * 1000;
+          const convertedPinned = pinnedGames
+            .map(marqueeToMatchFixture)
+            .filter((f) => {
+              const t = new Date(f.dateUtc).getTime();
+              return t >= nowMs && t <= maxMs;
+            });
+
+          // Deduplicate by game ID
+          const seenIds = new Set<string>();
+          const unified: MatchFixture[] = [];
+
+          for (const f of [...convertedPinned, ...all]) {
+            if (!seenIds.has(f.id)) {
+              seenIds.add(f.id);
+              unified.push(f);
+            }
+          }
+
+          unified.sort(
             (a, b) =>
               new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
           );
-          setFixtures(all);
+          setFixtures(unified);
         }
       } catch (err) {
         console.error('Failed to load upcoming fixtures:', err);
@@ -67,7 +96,7 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
     return () => {
       isCancelled = true;
     };
-  }, [teams]);
+  }, [teams, pinnedGames]);
 
   if (loading) {
     return (
@@ -143,13 +172,41 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
                 formattedTime = new Date(fixture.dateUtc).toLocaleTimeString();
               }
 
+              const isPinned = Boolean(fixture.isPinned);
+
               return (
                 <div
                   key={`${fixture.id}-${fixture.teamId}`}
-                  className='flex flex-col justify-between p-4 rounded-xl border border-white/10 bg-white/5 hover:border-white/20 transition-all'
+                  className={`flex flex-col justify-between p-4 rounded-xl border transition-all ${
+                    isPinned
+                      ? 'border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-white/[0.03] to-transparent shadow-sm'
+                      : 'border-white/10 bg-white/5 hover:border-white/20'
+                  }`}
                 >
+                  {/* Pinned Indicator Header */}
+                  {isPinned && (
+                    <div className='flex items-center justify-between pb-2 mb-2 border-b border-amber-500/15 text-[11px] font-semibold text-amber-300'>
+                      <span className='inline-flex items-center gap-1'>
+                        <Pin className='h-3 w-3 text-amber-400 rotate-45' />
+                        <span>Pinned Game (Custom Added)</span>
+                      </span>
+
+                      {onUnpinGame && (
+                        <button
+                          type='button'
+                          onClick={() => onUnpinGame(fixture.id)}
+                          className='text-gray-400 hover:text-rose-300 p-0.5 rounded hover:bg-rose-500/10 transition-colors flex items-center gap-1 text-[10px]'
+                          title='Remove from schedule'
+                        >
+                          <X className='h-3 w-3' />
+                          <span>Unpin</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <div className='flex items-center justify-between gap-4'>
-                    {/* Team 1 (Followed) */}
+                    {/* Team 1 (Followed or Home) */}
                     <div className='flex items-center gap-2.5 min-w-0 flex-1'>
                       {fixture.teamLogo && (
                         <div className='relative h-7 w-7 shrink-0 rounded bg-white/5 p-0.5'>
@@ -172,7 +229,7 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
                       {fixture.isHome ? 'vs' : '@'}
                     </span>
 
-                    {/* Team 2 (Opponent) */}
+                    {/* Team 2 (Opponent or Away) */}
                     <div className='flex items-center justify-end gap-2.5 min-w-0 flex-1 text-right'>
                       <span className='text-sm font-semibold text-gray-300 truncate'>
                         {fixture.opponentName}
@@ -199,7 +256,13 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
                       <span>{formattedTime}</span>
                     </div>
 
-                    <div className='flex items-center gap-3'>
+                    <div className='flex items-center gap-2 flex-wrap'>
+                      {fixture.oddsDetails && (
+                        <span className='text-[10px] font-mono text-cyan-300/80 bg-cyan-950/30 px-1.5 py-0.5 rounded border border-cyan-500/20'>
+                          {fixture.oddsDetails}
+                        </span>
+                      )}
+
                       {fixture.broadcast ? (
                         <div className='flex items-center gap-1.5 text-cyan-300 font-semibold bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md'>
                           <Tv className='h-3.5 w-3.5 text-cyan-400' />
@@ -211,6 +274,7 @@ export function SchedulePreview({ teams, userTimezone }: SchedulePreviewProps) {
                           <span>TV TBA</span>
                         </div>
                       )}
+
                       <span className='rounded bg-white/5 px-2 py-0.5 text-[10px] text-gray-400 border border-white/5 uppercase'>
                         {fixture.league}
                       </span>

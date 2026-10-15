@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseClient';
 import { getUpcomingTeamFixtures } from '@/lib/sportsApi';
-import { MatchFixture } from '@/lib/types';
+import { MatchFixture, MarqueeGame, marqueeToMatchFixture } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +73,38 @@ export async function GET(
       }
     }
 
-    // 3. Build RFC 5545 iCalendar payload
+    // 3. Fetch individually pinned games for the user
+    try {
+      const { data: pinnedRows } = await adminClient
+        .from('user_pinned_games')
+        .select('game_id, game_data')
+        .eq('user_id', userId);
+
+      const pinnedGames: MarqueeGame[] = (pinnedRows || [])
+        .map((r: any) => r.game_data)
+        .filter(Boolean);
+
+      const nowMs = Date.now() - 3.5 * 3600 * 1000;
+      const maxMs = Date.now() + 14 * 24 * 3600 * 1000;
+
+      for (const pg of pinnedGames) {
+        const fixture = marqueeToMatchFixture(pg);
+        const gameTime = new Date(fixture.dateUtc).getTime();
+        if (gameTime >= nowMs && gameTime <= maxMs && !seenIds.has(fixture.id)) {
+          seenIds.add(fixture.id);
+          allFixtures.push(fixture);
+        }
+      }
+    } catch (pinnedErr) {
+      console.error('Error fetching pinned games for calendar:', pinnedErr);
+    }
+
+    // Sort all fixtures by kickoff date
+    allFixtures.sort(
+      (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
+    );
+
+    // 4. Build RFC 5545 iCalendar payload
     const nowStr = formatToIcsDate(new Date());
     const icsLines: string[] = [
       'BEGIN:VCALENDAR',
@@ -82,7 +113,7 @@ export async function GET(
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'X-WR-CALNAME:Sports Digest Schedule',
-      'X-WR-CALDESC:Upcoming sports schedule and broadcast channels',
+      'X-WR-CALDESC:Upcoming sports schedule, pinned games, and broadcast channels',
       'X-PUBLISHED-TTL:PT1H',
       'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
     ];
@@ -93,13 +124,16 @@ export async function GET(
       const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
 
       const vs = f.isHome ? 'vs' : '@';
-      const summary = `${f.teamName} ${vs} ${f.opponentName}`;
+      const prefix = f.isPinned ? '📌 [Pinned] ' : '';
+      const summary = `${prefix}${f.teamName} ${vs} ${f.opponentName}`;
       
       const descriptionLines = [
         `🏆 ${f.league} Match`,
+        f.isPinned ? '⭐ Individually Pinned Game' : `Followed Team: ${f.teamName}`,
         f.broadcast ? `📺 TV: ${f.broadcast}` : null,
+        f.oddsDetails ? `🎲 Odds: ${f.oddsDetails}` : null,
         f.venue ? `📍 Venue: ${f.venue}` : null,
-        `Followed Team: ${f.teamName}`,
+        f.highlightTags && f.highlightTags.length > 0 ? `Tags: ${f.highlightTags.join(' • ')}` : null,
         '',
         'Synced via Sports Digest (https://sportsdigest.app)',
       ].filter(Boolean);

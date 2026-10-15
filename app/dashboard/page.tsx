@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabaseServer';
 import {
   ensureUserProfile,
   getUserSubscriptions,
+  getUserPinnedGames,
 } from '@/app/actions';
 import { getTopLeagueGames } from '@/lib/sportsApi';
 import { isBackendConfigured } from '@/lib/supabaseClient';
@@ -48,12 +49,19 @@ export default async function DashboardPage() {
     console.error('getUserSubscriptions failed:', err);
   }
 
+  let initialPinnedGames: any[] = [];
+  try {
+    initialPinnedGames = await getUserPinnedGames();
+  } catch (err: any) {
+    console.error('getUserPinnedGames failed:', err);
+  }
+
   let initialTopGames: any[] = [];
   try {
     initialTopGames = await getTopLeagueGames({
       leagueFilter: 'all',
       daysAhead: 7,
-      limit: 30,
+      limit: 50,
     });
   } catch (err: any) {
     console.error('getTopLeagueGames failed in dashboard:', err);
@@ -128,6 +136,7 @@ export default async function DashboardPage() {
         effectiveUserId={effectiveUserId}
         userTimezone={userTimezone}
         initialTopGames={initialTopGames}
+        initialPinnedGames={initialPinnedGames}
       />
     </div>
   );

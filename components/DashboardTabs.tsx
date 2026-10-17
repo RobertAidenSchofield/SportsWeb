@@ -12,6 +12,7 @@ import {
   Pin,
   Search,
   Trophy,
+  Share2,
 } from 'lucide-react';
 import { Team, MarqueeGame } from '@/lib/types';
 import { SubscribedTeams } from '@/components/SubscribedTeams';
@@ -20,6 +21,7 @@ import { CalendarSyncCard } from '@/components/CalendarSyncCard';
 import { TeamSearch } from '@/components/TeamSearch';
 import { TopGamesFeed } from '@/components/TopGamesFeed';
 import { PinnedGamesSection } from '@/components/PinnedGamesSection';
+import { ShareWeeklyModal } from '@/components/ShareWeeklyModal';
 import { unpinGame } from '@/app/actions';
 
 export type DashboardTabKey =
@@ -50,6 +52,7 @@ export function DashboardTabs({
 }: DashboardTabsProps) {
   const [activeTab, setActiveTab] = useState<DashboardTabKey>(initialTab);
   const [pinnedGames, setPinnedGames] = useState<MarqueeGame[]>(initialPinnedGames);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Sync with URL hash or search params on client mount
   useEffect(() => {
@@ -235,6 +238,16 @@ export function DashboardTabs({
             <div className='flex items-center gap-2 flex-wrap'>
               <button
                 type='button'
+                onClick={() => setShowShareModal(true)}
+                className='inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-colors shadow-sm'
+                title='Share this weekly view or bookmark it for quick access'
+              >
+                <Share2 className='h-3.5 w-3.5 text-emerald-400' />
+                <span>Share / Bookmark View</span>
+              </button>
+
+              <button
+                type='button'
                 onClick={() => handleSelectTab('discover')}
                 className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-colors'
               >
@@ -269,6 +282,7 @@ export function DashboardTabs({
             pinnedGames={pinnedGames}
             onUnpinGame={handleUnpin}
             onExploreTopGames={() => handleSelectTab('top_games')}
+            userId={effectiveUserId}
           />
         </div>
       )}
@@ -431,6 +445,17 @@ export function DashboardTabs({
             followedTeamsCount={totalSourcesCount}
           />
         </div>
+      )}
+
+      {/* Share & Bookmark Modal */}
+      {showShareModal && (
+        <ShareWeeklyModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          userId={effectiveUserId}
+          followedTeamsCount={followedTeams.length}
+          pinnedGamesCount={pinnedGames.length}
+        />
       )}
     </div>
   );

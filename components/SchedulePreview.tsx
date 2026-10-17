@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Flame,
   Filter,
+  Share2,
+  Bookmark,
 } from 'lucide-react';
 import {
   MatchFixture,
@@ -22,6 +24,7 @@ import {
 } from '@/lib/types';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BoxScoreModal } from './BoxScoreModal';
+import { ShareWeeklyModal } from './ShareWeeklyModal';
 
 interface SchedulePreviewProps {
   teams: Team[];
@@ -29,6 +32,7 @@ interface SchedulePreviewProps {
   pinnedGames?: MarqueeGame[];
   onUnpinGame?: (gameId: string) => void;
   onExploreTopGames?: () => void;
+  userId?: string;
 }
 
 export function SchedulePreview({
@@ -37,10 +41,12 @@ export function SchedulePreview({
   pinnedGames = [],
   onUnpinGame,
   onExploreTopGames,
+  userId,
 }: SchedulePreviewProps) {
   const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterMode, setFilterMode] = useState<'all' | 'upcoming' | 'final'>('all');
+  const [showShareModal, setShowShareModal] = useState(false);
   const [selectedBoxScore, setSelectedBoxScore] = useState<{
     eventId: string;
     sport: string;
@@ -276,8 +282,22 @@ export function SchedulePreview({
           </button>
         </div>
 
-        <div className='text-[11px] text-gray-400 px-2'>
-          <span>Times shown in <strong className='text-gray-200'>{userTimezone}</strong></span>
+        <div className='flex items-center gap-2 flex-wrap'>
+          {userId && (
+            <button
+              type='button'
+              onClick={() => setShowShareModal(true)}
+              className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm'
+              title='Share this weekly view or bookmark it for quick access'
+            >
+              <Share2 className='h-3.5 w-3.5 text-emerald-400' />
+              <span>Share / Bookmark View</span>
+            </button>
+          )}
+
+          <div className='text-[11px] text-gray-400 px-1'>
+            <span>Times shown in <strong className='text-gray-200'>{userTimezone}</strong></span>
+          </div>
         </div>
       </div>
 
@@ -520,6 +540,17 @@ export function SchedulePreview({
           eventId={selectedBoxScore.eventId}
           sport={selectedBoxScore.sport}
           league={selectedBoxScore.league}
+        />
+      )}
+
+      {/* Share & Bookmark Modal */}
+      {userId && showShareModal && (
+        <ShareWeeklyModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          userId={userId}
+          followedTeamsCount={teams.length}
+          pinnedGamesCount={pinnedGames.length}
         />
       )}
     </div>

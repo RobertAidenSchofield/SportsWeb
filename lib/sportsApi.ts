@@ -67,6 +67,82 @@ export const SUPPORTED_LEAGUES: LeagueConfig[] = [
   },
 ];
 
+/**
+ * Normalizes any league slug, alias, or display name to canonical ESPN sport and league slugs.
+ */
+export function normalizeLeagueAndSport(
+  rawLeague?: string | null,
+  rawSport?: string | null,
+): { sport: string; league: string } {
+  const l = (rawLeague || '').toLowerCase().trim();
+  const s = (rawSport || '').toLowerCase().trim();
+
+  const LEAGUE_MAP: Record<string, { sport: string; league: string }> = {
+    nfl: { sport: 'football', league: 'nfl' },
+    nba: { sport: 'basketball', league: 'nba' },
+    mlb: { sport: 'baseball', league: 'mlb' },
+    nhl: { sport: 'hockey', league: 'nhl' },
+    'college-football': { sport: 'football', league: 'college-football' },
+    cfb: { sport: 'football', league: 'college-football' },
+    ncaaf: { sport: 'football', league: 'college-football' },
+    'ncaa football': { sport: 'football', league: 'college-football' },
+    'mens-college-basketball': { sport: 'basketball', league: 'mens-college-basketball' },
+    cbb: { sport: 'basketball', league: 'mens-college-basketball' },
+    cbk: { sport: 'basketball', league: 'mens-college-basketball' },
+    ncaab: { sport: 'basketball', league: 'mens-college-basketball' },
+    'ncaa basketball': { sport: 'basketball', league: 'mens-college-basketball' },
+    'eng.1': { sport: 'soccer', league: 'eng.1' },
+    epl: { sport: 'soccer', league: 'eng.1' },
+    'premier league': { sport: 'soccer', league: 'eng.1' },
+    'english premier league': { sport: 'soccer', league: 'eng.1' },
+    'usa.1': { sport: 'soccer', league: 'usa.1' },
+    mls: { sport: 'soccer', league: 'usa.1' },
+    'major league soccer': { sport: 'soccer', league: 'usa.1' },
+    'uefa.champions': { sport: 'soccer', league: 'uefa.champions' },
+    ucl: { sport: 'soccer', league: 'uefa.champions' },
+    'champions league': { sport: 'soccer', league: 'uefa.champions' },
+    'uefa champions league': { sport: 'soccer', league: 'uefa.champions' },
+    'esp.1': { sport: 'soccer', league: 'esp.1' },
+    'la liga': { sport: 'soccer', league: 'esp.1' },
+    laliga: { sport: 'soccer', league: 'esp.1' },
+    'spanish primera división': { sport: 'soccer', league: 'esp.1' },
+    'ger.1': { sport: 'soccer', league: 'ger.1' },
+    bundesliga: { sport: 'soccer', league: 'ger.1' },
+    'ita.1': { sport: 'soccer', league: 'ita.1' },
+    'serie a': { sport: 'soccer', league: 'ita.1' },
+    wnba: { sport: 'basketball', league: 'wnba' },
+  };
+
+  if (LEAGUE_MAP[l]) {
+    return LEAGUE_MAP[l];
+  }
+
+  const matched = SUPPORTED_LEAGUES.find(
+    (item) =>
+      item.league.toLowerCase() === l ||
+      item.displayName.toLowerCase() === l,
+  );
+  if (matched) {
+    return { sport: matched.sport, league: matched.league };
+  }
+
+  return {
+    sport: s || 'football',
+    league: l || 'nfl',
+  };
+}
+
+/**
+ * Returns human-readable league name (e.g. "eng.1" -> "Premier League")
+ */
+export function getLeagueDisplayName(league: string): string {
+  const normalized = normalizeLeagueAndSport(league);
+  const matched = SUPPORTED_LEAGUES.find(
+    (l) => l.league.toLowerCase() === normalized.league.toLowerCase(),
+  );
+  return matched ? matched.displayName : league.toUpperCase();
+}
+
 interface EspnTeamData {
   id: string;
   displayName: string;
@@ -708,11 +784,26 @@ export async function getUpcomingTeamFixtures(
     const teamLogo = data.team?.logo;
 
     const fixtures: MatchFixture[] = [];
+    const leagueDisplayName = getLeagueDisplayName(league);
+
+    function parseScoreValue(comp: any): string | undefined {
+      if (!comp) return undefined;
+      if (comp.score?.displayValue !== undefined && comp.score?.displayValue !== null) {
+        return String(comp.score.displayValue);
+      }
+      if (comp.score?.value !== undefined && comp.score?.value !== null) {
+        return String(comp.score.value);
+      }
+      if (typeof comp.score === 'string' || typeof comp.score === 'number') {
+        return String(comp.score);
+      }
+      return undefined;
+    }
 
     for (const event of events) {
       const eventDate = new Date(event.date);
-      // Include fixtures occurring between earlier this week (past 5 days) and maxDate (7 days ahead)
-      const minDate = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+      // Include fixtures occurring between earlier this week (past 7 days) and maxDate (7 days ahead)
+      const minDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       if (eventDate < minDate || eventDate > maxDate) {
         continue;
       }
@@ -722,9 +813,15 @@ export async function getUpcomingTeamFixtures(
 
       const competitors = competition.competitors || [];
       const currentTeamCompetitor = competitors.find(
-        (c: any) => c.id === rawId,
+        (c: any) =>
+          String(c.id) === String(rawId) ||
+          String(c.team?.id) === String(rawId),
       );
-      const opponentCompetitor = competitors.find((c: any) => c.id !== rawId);
+      const opponentCompetitor = competitors.find(
+        (c: any) =>
+          String(c.id) !== String(rawId) &&
+          String(c.team?.id) !== String(rawId),
+      );
 
       const opponentName = opponentCompetitor?.team?.displayName || 'TBD';
       const opponentLogo =
@@ -736,28 +833,72 @@ export async function getUpcomingTeamFixtures(
       const isHome = currentTeamCompetitor?.homeAway === 'home';
 
       // Extract scores and game status
-      const currentScore =
-        currentTeamCompetitor?.score?.displayValue ??
-        (typeof currentTeamCompetitor?.score === 'string' ||
-        typeof currentTeamCompetitor?.score === 'number'
-          ? String(currentTeamCompetitor.score)
-          : undefined);
+      let currentScore = parseScoreValue(currentTeamCompetitor);
+      let opponentScore = parseScoreValue(opponentCompetitor);
 
-      const opponentScore =
-        opponentCompetitor?.score?.displayValue ??
-        (typeof opponentCompetitor?.score === 'string' ||
-        typeof opponentCompetitor?.score === 'number'
-          ? String(opponentCompetitor.score)
-          : undefined);
-
-      const teamWinner = currentTeamCompetitor?.winner === true;
-      const opponentWinner = opponentCompetitor?.winner === true;
-      const isCompleted = Boolean(competition.status?.type?.completed);
-      const isLive = competition.status?.type?.state === 'in';
-      const statusDetail =
+      let teamWinner = currentTeamCompetitor?.winner === true;
+      let opponentWinner = opponentCompetitor?.winner === true;
+      let isCompleted = Boolean(competition.status?.type?.completed);
+      let isLive = competition.status?.type?.state === 'in';
+      let statusDetail =
         competition.status?.type?.detail ||
         competition.status?.type?.description ||
         (isCompleted ? 'Final' : undefined);
+
+      // If game has started, is live, or completed, but team schedule endpoint lacks score:
+      const hasStarted = eventDate <= now;
+      if (
+        (isLive || isCompleted || hasStarted) &&
+        (currentScore === undefined || opponentScore === undefined)
+      ) {
+        try {
+          const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/summary?event=${event.id}`;
+          const sumRes = await fetch(summaryUrl, { next: { revalidate: 60 } });
+          if (sumRes.ok) {
+            const sumData = await sumRes.json();
+            const sumComp = sumData.header?.competitions?.[0];
+            if (sumComp) {
+              const sumCompetitors = sumComp.competitors || [];
+              const sCurrent = sumCompetitors.find(
+                (c: any) =>
+                  String(c.id) === String(rawId) ||
+                  String(c.team?.id) === String(rawId),
+              );
+              const sOpponent = sumCompetitors.find(
+                (c: any) =>
+                  String(c.id) !== String(rawId) &&
+                  String(c.team?.id) !== String(rawId),
+              );
+
+              if (sCurrent) {
+                const sCurr = parseScoreValue(sCurrent);
+                if (sCurr !== undefined) currentScore = sCurr;
+                if (sCurrent.winner !== undefined) {
+                  teamWinner = Boolean(sCurrent.winner);
+                }
+              }
+              if (sOpponent) {
+                const sOpp = parseScoreValue(sOpponent);
+                if (sOpp !== undefined) opponentScore = sOpp;
+                if (sOpponent.winner !== undefined) {
+                  opponentWinner = Boolean(sOpponent.winner);
+                }
+              }
+
+              if (sumComp.status?.type) {
+                isCompleted = Boolean(sumComp.status.type.completed);
+                isLive = sumComp.status.type.state === 'in';
+                statusDetail =
+                  sumComp.status.type.detail ||
+                  sumComp.status.type.description ||
+                  (isCompleted ? 'Final' : undefined);
+              }
+            }
+          }
+        } catch {
+          // non-fatal summary lookup fallback
+        }
+      }
 
       const oddsDetails = competition.odds?.[0]?.details;
 
@@ -802,6 +943,7 @@ export async function getUpcomingTeamFixtures(
         isHome,
         sport,
         league,
+        leagueDisplayName,
         dateUtc: event.date,
         broadcast,
         venue,

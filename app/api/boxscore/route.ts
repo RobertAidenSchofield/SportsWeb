@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BoxScoreData, BoxScoreStat } from '@/lib/types';
-import { SUPPORTED_LEAGUES } from '@/lib/sportsApi';
+import { normalizeLeagueAndSport, getLeagueDisplayName } from '@/lib/sportsApi';
+
+function extractScore(comp: any): string | undefined {
+  if (!comp) return undefined;
+  if (comp.score?.displayValue !== undefined && comp.score?.displayValue !== null) {
+    return String(comp.score.displayValue);
+  }
+  if (comp.score?.value !== undefined && comp.score?.value !== null) {
+    return String(comp.score.value);
+  }
+  if (typeof comp.score === 'string' || typeof comp.score === 'number') {
+    return String(comp.score);
+  }
+  return undefined;
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  let sport = searchParams.get('sport')?.toLowerCase() || '';
-  let league = searchParams.get('league')?.toLowerCase() || '';
-  const eventId = searchParams.get('eventId') || '';
+  let rawSport = searchParams.get('sport') || '';
+  let rawLeague = searchParams.get('league') || '';
+  let eventId = searchParams.get('eventId') || '';
 
   if (!eventId) {
     return NextResponse.json(
@@ -15,26 +29,52 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // If sport is missing, attempt lookup by league
-  if (!sport && league) {
-    const matched = SUPPORTED_LEAGUES.find(
-      (l) =>
-        l.league.toLowerCase() === league ||
-        l.displayName.toLowerCase() === league,
-    );
-    if (matched) {
-      sport = matched.sport;
-      league = matched.league;
+  // Clean eventId if it has a prefix like "espn:football:nfl:12345"
+  if (eventId.includes(':')) {
+    const parts = eventId.split(':');
+    if (parts.length >= 4 && parts[0] === 'espn') {
+      if (!rawSport) rawSport = parts[1];
+      if (!rawLeague) rawLeague = parts[2];
+      eventId = parts[3];
+    } else {
+      eventId = parts[parts.length - 1];
     }
   }
 
-  // Fallbacks if not recognized
-  if (!sport) sport = 'football';
-  if (!league) league = 'nfl';
+  // Always normalize sport and league to canonical ESPN slugs
+  const { sport, league } = normalizeLeagueAndSport(rawLeague, rawSport);
+  const leagueDisplayName = getLeagueDisplayName(league);
 
   try {
-    const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/summary?event=${eventId}`;
-    const res = await fetch(summaryUrl, { next: { revalidate: 60 } });
+    let summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/summary?event=${eventId}`;
+    let res = await fetch(summaryUrl, { next: { revalidate: 60 } });
+
+    // Fallback attempt: if 400/404 and college sport or soccer, check common alternate slugs
+    if (!res.ok && (res.status === 400 || res.status === 404)) {
+      const candidates: Array<{ s: string; l: string }> = [];
+      if (sport === 'football') {
+        candidates.push({ s: 'football', l: 'college-football' });
+        candidates.push({ s: 'football', l: 'nfl' });
+      } else if (sport === 'basketball') {
+        candidates.push({ s: 'basketball', l: 'mens-college-basketball' });
+        candidates.push({ s: 'basketball', l: 'nba' });
+      } else if (sport === 'soccer') {
+        candidates.push({ s: 'soccer', l: 'eng.1' });
+        candidates.push({ s: 'soccer', l: 'usa.1' });
+        candidates.push({ s: 'soccer', l: 'uefa.champions' });
+        candidates.push({ s: 'soccer', l: 'esp.1' });
+      }
+
+      for (const cand of candidates) {
+        if (cand.s === sport && cand.l === league) continue;
+        const altUrl = `https://site.api.espn.com/apis/site/v2/sports/${cand.s}/${cand.l}/summary?event=${eventId}`;
+        const altRes = await fetch(altUrl, { next: { revalidate: 60 } });
+        if (altRes.ok) {
+          res = altRes;
+          break;
+        }
+      }
+    }
 
     if (!res.ok) {
       return NextResponse.json(
@@ -121,7 +161,7 @@ export async function GET(req: NextRequest) {
     const boxScoreResponse: BoxScoreData = {
       eventId,
       sport,
-      league,
+      league: leagueDisplayName || league,
       statusDetail,
       isCompleted,
       isLive,
@@ -140,9 +180,7 @@ export async function GET(req: NextRequest) {
           homeComp?.team?.logos?.[0]?.href ||
           homeComp?.team?.logo ||
           `https://a.espncdn.com/i/teamlogos/${sport}/500/${homeComp?.team?.id}.png`,
-        score:
-          homeComp?.score?.displayValue ??
-          (homeComp?.score ? String(homeComp.score) : undefined),
+        score: extractScore(homeComp),
         record: homeComp?.record?.[0]?.displayValue || homeComp?.records?.[0]?.summary,
         winner: homeComp?.winner === true,
         linescores: homeLinescores,
@@ -155,9 +193,7 @@ export async function GET(req: NextRequest) {
           awayComp?.team?.logos?.[0]?.href ||
           awayComp?.team?.logo ||
           `https://a.espncdn.com/i/teamlogos/${sport}/500/${awayComp?.team?.id}.png`,
-        score:
-          awayComp?.score?.displayValue ??
-          (awayComp?.score ? String(awayComp.score) : undefined),
+        score: extractScore(awayComp),
         record: awayComp?.record?.[0]?.displayValue || awayComp?.records?.[0]?.summary,
         winner: awayComp?.winner === true,
         linescores: awayLinescores,

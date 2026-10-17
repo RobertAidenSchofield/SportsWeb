@@ -22,6 +22,7 @@ import {
   MarqueeGame,
   marqueeToMatchFixture,
 } from '@/lib/types';
+import { getLeagueDisplayName } from '@/lib/sportsApi';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BoxScoreModal } from './BoxScoreModal';
 import { ShareWeeklyModal } from './ShareWeeklyModal';
@@ -86,8 +87,8 @@ export function SchedulePreview({
           // Flatten followed teams fixtures
           const all = nested.flat();
 
-          // Merge pinned individual games (past 4 days to 7 days ahead)
-          const nowMs = Date.now() - 5 * 24 * 3600 * 1000;
+          // Merge pinned individual games (past 7 days to 8 days ahead)
+          const nowMs = Date.now() - 7 * 24 * 3600 * 1000;
           const maxMs = Date.now() + 8 * 24 * 3600 * 1000;
           const convertedPinned = pinnedGames
             .map(marqueeToMatchFixture)
@@ -96,17 +97,67 @@ export function SchedulePreview({
               return t >= nowMs && t <= maxMs;
             });
 
-          // Deduplicate by game ID
-          const seenIds = new Set<string>();
-          const unified: MatchFixture[] = [];
+          const getCleanEventId = (f: MatchFixture) =>
+            f.eventId || (f.id.includes(':') ? f.id.split(':').pop()! : f.id);
 
-          for (const f of [...convertedPinned, ...all]) {
-            if (!seenIds.has(f.id)) {
-              seenIds.add(f.id);
-              unified.push(f);
+          // For any pinned game that has started or is completed but lacks score, fetch fresh box score
+          const enrichedPinned = await Promise.all(
+            convertedPinned.map(async (p) => {
+              const startTime = new Date(p.dateUtc).getTime();
+              const hasStarted = startTime <= Date.now() + 15 * 60 * 1000;
+              if (
+                hasStarted &&
+                (p.teamScore === undefined || p.opponentScore === undefined)
+              ) {
+                try {
+                  const evId = getCleanEventId(p);
+                  const bRes = await fetch(
+                    `/api/boxscore?sport=${encodeURIComponent(p.sport)}&league=${encodeURIComponent(p.league)}&eventId=${encodeURIComponent(evId)}`,
+                  );
+                  if (bRes.ok) {
+                    const bData = await bRes.json();
+                    return {
+                      ...p,
+                      teamScore: bData.homeTeam?.score,
+                      opponentScore: bData.awayTeam?.score,
+                      teamWinner: bData.homeTeam?.winner,
+                      opponentWinner: bData.awayTeam?.winner,
+                      statusDetail: bData.statusDetail || p.statusDetail,
+                      isCompleted: Boolean(bData.isCompleted),
+                      isLive: Boolean(bData.isLive),
+                    };
+                  }
+                } catch {
+                  // ignore fallback error
+                }
+              }
+              return p;
+            }),
+          );
+
+          if (isCancelled) return;
+
+          // Deduplicate by clean event ID
+          const fixtureMap = new Map<string, MatchFixture>();
+
+          // Followed team fixtures take precedence for fresh schedule data
+          for (const f of all) {
+            const key = getCleanEventId(f);
+            fixtureMap.set(key, f);
+          }
+
+          // Merge pinned games
+          for (const p of enrichedPinned) {
+            const key = getCleanEventId(p);
+            if (fixtureMap.has(key)) {
+              const existing = fixtureMap.get(key)!;
+              existing.isPinned = true;
+            } else {
+              fixtureMap.set(key, p);
             }
           }
 
+          const unified = Array.from(fixtureMap.values());
           unified.sort(
             (a, b) =>
               new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
@@ -349,7 +400,7 @@ export function SchedulePreview({
                     <div className='flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/5 text-xs'>
                       <div className='flex items-center gap-2 flex-wrap'>
                         <span className='rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider'>
-                          {fixture.league}
+                          {fixture.leagueDisplayName || getLeagueDisplayName(fixture.league)}
                         </span>
 
                         {fixture.isLive ? (

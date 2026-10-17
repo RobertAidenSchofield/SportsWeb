@@ -163,17 +163,17 @@ export default async function SharePage({ params, searchParams }: PageProps) {
   const fixtureResults = await Promise.all(fixturePromises);
   const flattened = fixtureResults.flat();
 
-  // Deduplicate matches
-  const seenIds = new Set<string>();
+  const getCleanEventId = (f: MatchFixture) =>
+    f.eventId || (f.id.includes(':') ? f.id.split(':').pop()! : f.id);
+
+  const fixtureMap = new Map<string, MatchFixture>();
   for (const f of flattened) {
-    if (!seenIds.has(f.id)) {
-      seenIds.add(f.id);
-      allFixtures.push(f);
-    }
+    const key = getCleanEventId(f);
+    fixtureMap.set(key, f);
   }
 
-  // 3b. Merge individually pinned games within 14-day schedule window
-  const nowMs = Date.now() - 4 * 3600 * 1000;
+  // 3b. Merge individually pinned games within 14-day schedule window (look back 7 days for current week scores)
+  const nowMs = Date.now() - 7 * 24 * 3600 * 1000;
   const maxMs = Date.now() + 14 * 24 * 3600 * 1000;
 
   for (const pg of pinnedGames) {
@@ -181,18 +181,17 @@ export default async function SharePage({ params, searchParams }: PageProps) {
     converted.isPinned = true;
     const gameTime = new Date(converted.dateUtc).getTime();
     if (gameTime >= nowMs && gameTime <= maxMs) {
-      if (!seenIds.has(converted.id)) {
-        seenIds.add(converted.id);
-        allFixtures.push(converted);
+      const key = getCleanEventId(converted);
+      if (fixtureMap.has(key)) {
+        const existing = fixtureMap.get(key)!;
+        existing.isPinned = true;
       } else {
-        // If already present from a followed team, ensure it has isPinned tag
-        const existing = allFixtures.find((x) => x.id === converted.id);
-        if (existing) {
-          existing.isPinned = true;
-        }
+        fixtureMap.set(key, converted);
       }
     }
   }
+
+  allFixtures.push(...Array.from(fixtureMap.values()));
 
   // Sort by kickoff date
   allFixtures.sort(

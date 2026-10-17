@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { MatchFixture, Team, MarqueeGame } from '@/lib/types';
+import { getLeagueDisplayName } from '@/lib/sportsApi';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BoxScoreModal } from './BoxScoreModal';
 
@@ -248,7 +249,7 @@ export function ShareScheduleView({
                       <div className='flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/5 text-xs'>
                         <div className='flex items-center gap-2 flex-wrap'>
                           <span className='rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider'>
-                            {fixture.league}
+                            {fixture.leagueDisplayName || getLeagueDisplayName(fixture.league)}
                           </span>
 
                           {fixture.isLive ? (

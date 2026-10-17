@@ -43,16 +43,26 @@ export function BoxScoreModal({
     setLoading(true);
     setError(null);
 
-    // Clean eventId (remove "espn:sport:league:" prefix if present)
-    const cleanEventId = eventId.includes(':')
-      ? eventId.split(':').pop()!
-      : eventId;
+    // Clean composite ID (e.g. "espn:football:nfl:12345")
+    let reqSport = sport;
+    let reqLeague = league;
+    let cleanEventId = eventId;
+    if (eventId.includes(':')) {
+      const parts = eventId.split(':');
+      if (parts.length >= 4 && parts[0] === 'espn') {
+        if (!reqSport) reqSport = parts[1];
+        if (!reqLeague) reqLeague = parts[2];
+        cleanEventId = parts[3];
+      } else {
+        cleanEventId = parts[parts.length - 1];
+      }
+    }
 
     async function fetchBoxScore() {
       try {
         const params = new URLSearchParams({
-          sport,
-          league,
+          sport: reqSport,
+          league: reqLeague,
           eventId: cleanEventId,
         });
         const res = await fetch(`/api/boxscore?${params.toString()}`);

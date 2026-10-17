@@ -33,6 +33,7 @@ export interface MatchFixture {
   isHome: boolean;
   sport: string;
   league: string;
+  leagueDisplayName?: string;
   dateUtc: string; // ISO UTC string
   broadcast?: string; // e.g. "ESPN", "FOX", "CBS"
   venue?: string;
@@ -167,7 +168,8 @@ export function marqueeToMatchFixture(game: MarqueeGame): MatchFixture {
     opponentLogo: game.awayTeam.logo,
     isHome: true,
     sport: game.sport,
-    league: game.league,
+    league: game.leagueSlug || game.league,
+    leagueDisplayName: game.league,
     dateUtc: game.dateUtc,
     broadcast: game.broadcastSummary,
     venue: game.venue,

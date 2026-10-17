@@ -400,7 +400,6 @@ export async function pinGame(
 
     if (!isBackendConfigured()) {
       try {
-        revalidatePath('/dashboard');
         revalidatePath('/share/demo_user');
         revalidatePath('/api/calendar/demo_user');
       } catch {}
@@ -500,7 +499,6 @@ export async function pinGame(
     }
 
     try {
-      revalidatePath('/dashboard');
       revalidatePath(`/share/${userId}`);
       revalidatePath(`/api/calendar/${userId}`);
       revalidatePath('/share/demo_user');
@@ -525,7 +523,6 @@ export async function unpinGame(
 
     if (!isBackendConfigured()) {
       try {
-        revalidatePath('/dashboard');
         revalidatePath('/share/demo_user');
         revalidatePath('/api/calendar/demo_user');
       } catch {}
@@ -572,7 +569,6 @@ export async function unpinGame(
     }
 
     try {
-      revalidatePath('/dashboard');
       revalidatePath(`/share/${userId}`);
       revalidatePath(`/api/calendar/${userId}`);
       revalidatePath('/share/demo_user');

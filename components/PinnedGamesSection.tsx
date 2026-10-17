@@ -36,6 +36,7 @@ export function PinnedGamesSection({
 
   const handleUnpin = async (gameId: string) => {
     setPendingUnpinId(gameId);
+    const savedScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
     // Optimistic UI removal
     const remaining = pinnedGames.filter((g) => g.id !== gameId);
     setPinnedGames(remaining);
@@ -49,6 +50,11 @@ export function PinnedGamesSection({
       setPinnedGames(initialPinnedGames);
     } finally {
       setPendingUnpinId(null);
+      if (typeof window !== 'undefined') {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: savedScrollY, behavior: 'instant' });
+        });
+      }
     }
   };
 
@@ -99,6 +105,7 @@ export function PinnedGamesSection({
           </div>
           {onExploreTopGames && (
             <button
+              type='button'
               onClick={onExploreTopGames}
               className='inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs transition-colors'
             >

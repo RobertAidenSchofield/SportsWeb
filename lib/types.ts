@@ -36,11 +36,19 @@ export interface MatchFixture {
   dateUtc: string; // ISO UTC string
   broadcast?: string; // e.g. "ESPN", "FOX", "CBS"
   venue?: string;
-  status?: string; // "scheduled", "in_progress", "final"
+  status?: string; // "scheduled", "in_progress", "final", "STATUS_FINAL", etc.
+  statusDetail?: string; // e.g. "Final", "Final/OT", "Halftime", "3rd 4:12"
+  isCompleted?: boolean;
+  isLive?: boolean;
+  teamScore?: string | number;
+  opponentScore?: string | number;
+  teamWinner?: boolean;
+  opponentWinner?: boolean;
   isPinned?: boolean; // Pinned individually by user
   excitementScore?: number;
   highlightTags?: string[];
   oddsDetails?: string;
+  eventId?: string;
 }
 
 export interface UserPinnedGame {
@@ -67,6 +75,7 @@ export interface MarqueeTeam {
   rank?: number; // e.g. 4 for #4 Ohio State
   isHome: boolean;
   score?: string;
+  winner?: boolean;
 }
 
 export interface MarqueeGame {
@@ -91,12 +100,64 @@ export interface MarqueeGame {
   tier: ExcitementTier; // 'ultra' (90+), 'high' (78+), 'featured' (65+), 'standard'
   highlightTags: string[]; // ["🔥 #4 vs #5 Top 10", "📺 National TV: Fox", "⚡ Spread: 3.5"]
   isRivalry?: boolean;
+  status?: string;
+  statusDetail?: string;
+  isCompleted?: boolean;
+  isLive?: boolean;
+}
+
+export interface BoxScoreStat {
+  label: string;
+  home: string;
+  away: string;
+}
+
+export interface BoxScoreData {
+  eventId: string;
+  sport: string;
+  league: string;
+  statusDetail?: string;
+  isCompleted?: boolean;
+  isLive?: boolean;
+  clock?: string;
+  period?: number;
+  venue?: string;
+  attendance?: string;
+  broadcasts?: string[];
+  homeTeam: {
+    id: string;
+    name: string;
+    abbreviation?: string;
+    logo: string;
+    score?: string;
+    record?: string;
+    winner?: boolean;
+    linescores?: string[];
+  };
+  awayTeam: {
+    id: string;
+    name: string;
+    abbreviation?: string;
+    logo: string;
+    score?: string;
+    record?: string;
+    winner?: boolean;
+    linescores?: string[];
+  };
+  stats: BoxScoreStat[];
+  leaders?: Array<{
+    category: string;
+    athleteName: string;
+    displayValue: string;
+    teamLogo?: string;
+  }>;
 }
 
 /**
  * Transforms a MarqueeGame into a MatchFixture for unified schedule preview & calendar export
  */
 export function marqueeToMatchFixture(game: MarqueeGame): MatchFixture {
+  const eventId = game.id.includes(':') ? game.id.split(':').pop() : game.id;
   return {
     id: game.id,
     teamId: game.homeTeam.id,
@@ -110,11 +171,19 @@ export function marqueeToMatchFixture(game: MarqueeGame): MatchFixture {
     dateUtc: game.dateUtc,
     broadcast: game.broadcastSummary,
     venue: game.venue,
-    status: 'scheduled',
+    status: game.status || 'scheduled',
+    statusDetail: game.statusDetail,
+    isCompleted: game.isCompleted,
+    isLive: game.isLive,
+    teamScore: game.homeTeam.score,
+    opponentScore: game.awayTeam.score,
+    teamWinner: game.homeTeam.winner,
+    opponentWinner: game.awayTeam.winner,
     isPinned: true,
     excitementScore: game.excitementScore,
     highlightTags: game.highlightTags,
     oddsDetails: game.odds?.details,
+    eventId,
   };
 }
 

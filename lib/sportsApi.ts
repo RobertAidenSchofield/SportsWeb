@@ -711,11 +711,9 @@ export async function getUpcomingTeamFixtures(
 
     for (const event of events) {
       const eventDate = new Date(event.date);
-      // Include fixtures occurring between now (or today) and maxDate
-      if (
-        eventDate < new Date(now.getTime() - 2 * 60 * 60 * 1000) ||
-        eventDate > maxDate
-      ) {
+      // Include fixtures occurring between earlier this week (past 5 days) and maxDate (7 days ahead)
+      const minDate = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+      if (eventDate < minDate || eventDate > maxDate) {
         continue;
       }
 
@@ -736,6 +734,32 @@ export async function getUpcomingTeamFixtures(
       const currentTeamLogo =
         currentTeamCompetitor?.team?.logos?.[0]?.href || teamLogo || '';
       const isHome = currentTeamCompetitor?.homeAway === 'home';
+
+      // Extract scores and game status
+      const currentScore =
+        currentTeamCompetitor?.score?.displayValue ??
+        (typeof currentTeamCompetitor?.score === 'string' ||
+        typeof currentTeamCompetitor?.score === 'number'
+          ? String(currentTeamCompetitor.score)
+          : undefined);
+
+      const opponentScore =
+        opponentCompetitor?.score?.displayValue ??
+        (typeof opponentCompetitor?.score === 'string' ||
+        typeof opponentCompetitor?.score === 'number'
+          ? String(opponentCompetitor.score)
+          : undefined);
+
+      const teamWinner = currentTeamCompetitor?.winner === true;
+      const opponentWinner = opponentCompetitor?.winner === true;
+      const isCompleted = Boolean(competition.status?.type?.completed);
+      const isLive = competition.status?.type?.state === 'in';
+      const statusDetail =
+        competition.status?.type?.detail ||
+        competition.status?.type?.description ||
+        (isCompleted ? 'Final' : undefined);
+
+      const oddsDetails = competition.odds?.[0]?.details;
 
       // Extract broadcast network (TV / Streaming)
       const broadcastChannels: string[] = [];
@@ -782,6 +806,15 @@ export async function getUpcomingTeamFixtures(
         broadcast,
         venue,
         status,
+        statusDetail,
+        isCompleted,
+        isLive,
+        teamScore: currentScore,
+        opponentScore,
+        teamWinner,
+        opponentWinner,
+        oddsDetails,
+        eventId: event.id,
       });
     }
 
@@ -1259,6 +1292,27 @@ export async function getTopLeagueGames(
           const defaultLogo = (id: string, abbrev?: string) =>
             `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbrev?.toLowerCase() || id}.png`;
 
+          const homeScoreStr =
+            homeComp.score?.displayValue ??
+            (typeof homeComp.score === 'string' ||
+            typeof homeComp.score === 'number'
+              ? String(homeComp.score)
+              : undefined);
+
+          const awayScoreStr =
+            awayComp.score?.displayValue ??
+            (typeof awayComp.score === 'string' ||
+            typeof awayComp.score === 'number'
+              ? String(awayComp.score)
+              : undefined);
+
+          const isCompleted = Boolean(competition.status?.type?.completed);
+          const isLive = competition.status?.type?.state === 'in';
+          const statusDetail =
+            competition.status?.type?.detail ||
+            competition.status?.type?.description ||
+            (isCompleted ? 'Final' : undefined);
+
           const homeTeam: MarqueeTeam = {
             id: `espn:${sport}:${league}:${homeComp.team.id}`,
             rawId: homeComp.team.id,
@@ -1275,7 +1329,8 @@ export async function getTopLeagueGames(
                 ? homeComp.curatedRank.current
                 : undefined,
             isHome: true,
-            score: homeComp.score,
+            score: homeScoreStr,
+            winner: homeComp.winner === true,
           };
 
           const awayTeam: MarqueeTeam = {
@@ -1294,7 +1349,8 @@ export async function getTopLeagueGames(
                 ? awayComp.curatedRank.current
                 : undefined,
             isHome: false,
-            score: awayComp.score,
+            score: awayScoreStr,
+            winner: awayComp.winner === true,
           };
 
           const oddsObj = competition.odds?.[0];
@@ -1325,6 +1381,10 @@ export async function getTopLeagueGames(
             tier: excitement.tier,
             highlightTags: excitement.highlightTags,
             isRivalry: excitement.isRivalry,
+            status: competition.status?.type?.name || 'scheduled',
+            statusDetail,
+            isCompleted,
+            isLive,
           });
         }
       }

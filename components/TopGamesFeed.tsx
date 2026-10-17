@@ -98,6 +98,7 @@ export function TopGamesFeed({
     league: string,
   ) => {
     const isFollowed = followedIds.has(teamData.id);
+    const savedScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
     setPendingTeamId(teamData.id);
 
     // Optimistic UI
@@ -129,6 +130,11 @@ export function TopGamesFeed({
         setFollowedIds(new Set(followedIds));
       } finally {
         setPendingTeamId(null);
+        if (typeof window !== 'undefined') {
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: savedScrollY, behavior: 'instant' });
+          });
+        }
       }
     });
   };
@@ -136,6 +142,7 @@ export function TopGamesFeed({
   // Toggle pin individual game to dashboard
   const handleTogglePin = async (game: MarqueeGame) => {
     const isPinned = pinnedIds.has(game.id);
+    const savedScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
     setPendingPinGameId(game.id);
 
     // Optimistic UI
@@ -172,6 +179,11 @@ export function TopGamesFeed({
         onPinToggle?.(game, isPinned);
       } finally {
         setPendingPinGameId(null);
+        if (typeof window !== 'undefined') {
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: savedScrollY, behavior: 'instant' });
+          });
+        }
       }
     });
   };
@@ -583,6 +595,7 @@ export function TopGamesFeed({
 
                     {/* Quick Follow Away Team */}
                     <button
+                      type='button'
                       onClick={() =>
                         handleToggleFollow(
                           game.awayTeam,
@@ -651,6 +664,7 @@ export function TopGamesFeed({
 
                     {/* Quick Follow Home Team */}
                     <button
+                      type='button'
                       onClick={() =>
                         handleToggleFollow(
                           game.homeTeam,

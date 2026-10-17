@@ -89,6 +89,7 @@ export function TeamSearch({
   const handleToggleFollow = async (team: Team) => {
     const isCurrentlyFollowed = optimisticFollows.has(team.id);
     const nextState = !isCurrentlyFollowed;
+    const savedScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
 
     // 1. Optimistic update immediately
     setOptimisticFollows((prev) => {
@@ -132,6 +133,11 @@ export function TeamSearch({
         }
 
         router.refresh();
+        if (typeof window !== 'undefined') {
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: savedScrollY, behavior: 'instant' });
+          });
+        }
       } catch (error: any) {
         console.error('Failed to update subscription:', error);
         alert(

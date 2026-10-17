@@ -13,11 +13,27 @@ import {
   Trophy,
   AlertTriangle,
   ExternalLink,
+  CalendarDays,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage() {
+interface PageProps {
+  searchParams?: Promise<{ tab?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: PageProps) {
+  const resolvedParams = searchParams ? await searchParams : undefined;
+  const tabParam = resolvedParams?.tab;
+  const initialTab =
+    tabParam === 'weekly' ||
+    tabParam === 'teams' ||
+    tabParam === 'discover' ||
+    tabParam === 'top_games' ||
+    tabParam === 'calendar'
+      ? tabParam
+      : 'weekly';
+
   const backendConfigured = isBackendConfigured();
   const supabase = await createClient();
 
@@ -95,9 +111,20 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* Timezone Preference */}
-        <div className='bg-white/5 border border-white/10 rounded-xl p-2.5 w-full sm:w-auto'>
-          <TimezoneSelector initialTimezone={userTimezone} />
+        {/* Header Right Actions: Weekly View Button + Timezone Selector */}
+        <div className='flex items-center gap-2.5 flex-wrap w-full sm:w-auto'>
+          <a
+            href='#weekly'
+            className='inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all shadow-sm'
+            title='View weekly schedule with box scores'
+          >
+            <CalendarDays className='h-4 w-4 text-emerald-400' />
+            <span>Weekly View</span>
+          </a>
+
+          <div className='bg-white/5 border border-white/10 rounded-xl p-2.5 flex-1 sm:flex-initial'>
+            <TimezoneSelector initialTimezone={userTimezone} />
+          </div>
         </div>
       </div>
 
@@ -129,7 +156,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Interactive Tabs (My Followed Teams vs Marquee Matchups) */}
+      {/* Interactive Tabs (Weekly View, Followed Teams, Discover, Marquee Matchups, Calendar Sync) */}
       <DashboardTabs
         followedTeams={followedTeams}
         followedTeamIds={followedTeamIds}
@@ -137,6 +164,7 @@ export default async function DashboardPage() {
         userTimezone={userTimezone}
         initialTopGames={initialTopGames}
         initialPinnedGames={initialPinnedGames}
+        initialTab={initialTab}
       />
     </div>
   );

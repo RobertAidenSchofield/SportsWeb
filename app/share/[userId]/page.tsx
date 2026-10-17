@@ -1,5 +1,4 @@
 import { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdminClient, isBackendConfigured } from '@/lib/supabaseClient';
@@ -16,7 +15,6 @@ import {
   ExternalLink,
   Share2,
   CalendarDays,
-  Sparkles,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -31,11 +29,8 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { userId } = await params;
   return {
-    title: 'Live Sports Schedule | Sports Digest',
-    description: `Upcoming sports matchups and broadcast schedule for user ${userId.slice(
-      0,
-      8
-    )}`,
+    title: 'Weekly Match Schedule | Sports Digest',
+    description: `Upcoming sports matchups and live scores`,
   };
 }
 
@@ -274,7 +269,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
                 <Trophy className="h-4 w-4" />
               </span>
               <span className="text-sm font-bold text-white tracking-tight">
-                Live Sports Schedule & Box Scores
+                Weekly Match Schedule
               </span>
             </div>
             <a
@@ -337,75 +332,18 @@ export default async function SharePage({ params, searchParams }: PageProps) {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-8">
-        {/* Hero Header */}
-        <div className="rounded-3xl border border-white/10 bg-gradient-to-r from-emerald-950/20 via-black/40 to-blue-950/20 p-6 sm:p-8 relative overflow-hidden space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-              <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Public Live Schedule & Box Scores</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 font-medium">
-                ⭐ Bookmark this page for quick access
-              </span>
-            </div>
-          </div>
-
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
-            Weekly Match Schedule & Scores
+        {/* Header */}
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-emerald-950/20 via-black/40 to-blue-950/20 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
+            Weekly Match Schedule
           </h1>
-          <p className="text-xs sm:text-sm text-gray-300 max-w-2xl leading-relaxed">
-            Live broadcast times, final scores, and detailed box scores for {teams.length}{' '}
-            {teams.length === 1 ? 'team' : 'teams'}
-            {pinnedGames.length > 0
-              ? ` and ${pinnedGames.length} pinned ${
-                  pinnedGames.length === 1 ? 'matchup' : 'matchups'
-                }`
-              : ''}. Synchronized live with ESPN. Times shown in{' '}
-            <span className="font-semibold text-emerald-400">
-              {userTimezone}
-            </span>.
-          </p>
-
-          {/* Followed Teams & Pinned Games Pill List */}
-          {(teams.length > 0 || pinnedGames.length > 0) && (
-            <div className="pt-2 flex flex-wrap gap-2">
-              {teams.map((t) => (
-                <div
-                  key={t.id}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-gray-200"
-                >
-                  {t.logo_url && (
-                    <Image
-                      src={t.logo_url}
-                      alt={t.name}
-                      width={18}
-                      height={18}
-                      className="object-contain"
-                      unoptimized
-                    />
-                  )}
-                  <span>{t.name}</span>
-                  <span className="text-[10px] text-gray-400 uppercase">
-                    ({t.league})
-                  </span>
-                </div>
-              ))}
-              {pinnedGames.map((g) => (
-                <div
-                  key={`pinned-${g.id}`}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-medium text-amber-200"
-                >
-                  <span>📌</span>
-                  <span>{g.shortName || g.name}</span>
-                  <span className="text-[10px] text-amber-400/80 uppercase">
-                    ({g.league})
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span>
+              Times in <strong className="text-gray-200">{userTimezone}</strong>
+            </span>
+            <span className="hidden sm:inline text-gray-600">•</span>
+            <span className="hidden sm:inline">⭐ Bookmark for quick access</span>
+          </div>
         </div>
 
         {/* Fixtures Schedule with Box Scores */}

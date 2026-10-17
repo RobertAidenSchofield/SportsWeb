@@ -6,7 +6,6 @@ import {
   Calendar,
   Tv,
   Clock,
-  Pin,
   BarChart2,
   CheckCircle2,
   Bookmark,
@@ -256,11 +255,7 @@ export function ShareScheduleView({
                           isMultiGame
                             ? 'p-2.5 sm:p-3 rounded-xl'
                             : 'p-3 sm:p-3.5 rounded-xl'
-                        } ${
-                          fixture.isPinned
-                            ? 'border-amber-500/35 bg-gradient-to-br from-amber-950/20 via-white/[0.03] to-transparent shadow-sm'
-                            : 'border-white/10 bg-white/[0.03] hover:border-white/20'
-                        }`}
+                        } border-white/10 bg-white/[0.03] hover:border-white/20`}
                       >
                         {/* Card Header */}
                         <div className='flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/5 text-[11px] leading-tight'>
@@ -288,13 +283,6 @@ export function ShareScheduleView({
                               <span className='inline-flex items-center gap-1 text-[10px] text-gray-400 font-medium shrink-0'>
                                 <Clock className='h-2.5 w-2.5 text-gray-500' />
                                 <span>{formattedTime}</span>
-                              </span>
-                            )}
-
-                            {fixture.isPinned && (
-                              <span className='inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-300 bg-amber-500/15 px-1 py-0.2 rounded border border-amber-500/25 shrink-0'>
-                                <Pin className='h-2 w-2 rotate-45' />
-                                <span>Pinned</span>
                               </span>
                             )}
                           </div>

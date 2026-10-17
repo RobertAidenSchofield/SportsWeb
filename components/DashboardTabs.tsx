@@ -216,65 +216,7 @@ export function DashboardTabs({
 
       {/* ----------------- TAB 1: WEEKLY VIEW ----------------- */}
       {activeTab === 'weekly' && (
-        <div className='space-y-6 animate-in fade-in duration-200'>
-          {/* Header Bar */}
-          <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4'>
-            <div>
-              <h2 className='text-lg sm:text-xl font-bold text-white flex items-center gap-2.5'>
-                <CalendarDays className='h-5 w-5 text-emerald-400' />
-                <span>Weekly Schedule & Box Scores</span>
-              </h2>
-              <p className='text-xs text-gray-400 mt-1'>
-                Full game schedule for your {followedTeams.length} followed{' '}
-                {followedTeams.length === 1 ? 'team' : 'teams'} and{' '}
-                {pinnedGames.length} pinned{' '}
-                {pinnedGames.length === 1 ? 'matchup' : 'matchups'}. Click{' '}
-                <strong className='text-emerald-300'>Box Score</strong> on any
-                game for quarter linescores and team statistics.
-              </p>
-            </div>
-
-            {/* Quick Actions Strip */}
-            <div className='flex items-center gap-2 flex-wrap'>
-              <button
-                type='button'
-                onClick={() => setShowShareModal(true)}
-                className='inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-colors shadow-sm'
-                title='Share this weekly view or bookmark it for quick access'
-              >
-                <Share2 className='h-3.5 w-3.5 text-emerald-400' />
-                <span>Share / Bookmark View</span>
-              </button>
-
-              <button
-                type='button'
-                onClick={() => handleSelectTab('discover')}
-                className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-colors'
-              >
-                <PlusCircle className='h-3.5 w-3.5 text-emerald-400' />
-                <span>Follow Teams</span>
-              </button>
-
-              <button
-                type='button'
-                onClick={() => handleSelectTab('top_games')}
-                className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-colors'
-              >
-                <Flame className='h-3.5 w-3.5 text-amber-400' />
-                <span>Top Matchups</span>
-              </button>
-
-              <button
-                type='button'
-                onClick={() => handleSelectTab('calendar')}
-                className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-cyan-300 border border-white/10 transition-colors'
-              >
-                <Calendar className='h-3.5 w-3.5 text-cyan-400' />
-                <span>Calendar Sync</span>
-              </button>
-            </div>
-          </div>
-
+        <div className='space-y-3.5 sm:space-y-4 animate-in fade-in duration-200'>
           {/* Unified Weekly Schedule Preview with Box Scores */}
           <SchedulePreview
             teams={followedTeams}

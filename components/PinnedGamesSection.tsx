@@ -195,7 +195,7 @@ export function PinnedGamesSection({
           )}
         </div>
       ) : (
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3'>
           {pinnedGames.map((game) => {
             let formattedKickoff = 'Upcoming';
             try {
@@ -211,36 +211,36 @@ export function PinnedGamesSection({
             return (
               <div
                 key={game.id}
-                className='rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/20 via-white/[0.03] to-transparent p-4 sm:p-5 flex flex-col justify-between space-y-3.5 transition-all hover:border-amber-500/40'
+                className='rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-950/20 via-white/[0.03] to-transparent p-3 sm:p-3.5 flex flex-col justify-between space-y-2.5 transition-all hover:border-amber-500/40'
               >
                 {/* Header */}
-                <div className='flex items-start justify-between gap-3 border-b border-white/5 pb-2.5'>
-                  <div className='space-y-0.5'>
-                    <div className='flex items-center gap-2 flex-wrap'>
-                      <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white uppercase tracking-wider'>
+                <div className='flex items-start justify-between gap-2 border-b border-white/5 pb-2'>
+                  <div className='space-y-0.5 min-w-0'>
+                    <div className='flex items-center gap-1.5 flex-wrap'>
+                      <span className='px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white uppercase tracking-wider'>
                         {getLeagueDisplayName(game.leagueSlug || game.league)}
                       </span>
 
                       {game.isLive ? (
-                        <span className='inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30'>
+                        <span className='inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30'>
                           <span className='h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse' />
                           <span>LIVE {game.statusDetail ? `• ${game.statusDetail}` : ''}</span>
                         </span>
                       ) : game.isCompleted ? (
-                        <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'>
-                          <CheckCircle2 className='h-3 w-3 text-emerald-400' />
+                        <span className='inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400'>
+                          <CheckCircle2 className='h-2.5 w-2.5' />
                           <span>{game.statusDetail || 'FINAL'}</span>
                         </span>
                       ) : (
-                        <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30'>
-                          <Flame className='h-3 w-3 text-amber-400' />
+                        <span className='inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30'>
+                          <Flame className='h-2.5 w-2.5 text-amber-400' />
                           <span>{game.excitementScore}/100</span>
                         </span>
                       )}
                     </div>
-                    <p className='text-xs text-gray-400 font-medium flex items-center gap-1.5 pt-1'>
-                      <Calendar className='h-3.5 w-3.5 text-gray-500' />
-                      <span>{formattedKickoff}</span>
+                    <p className='text-[10px] text-gray-400 font-medium flex items-center gap-1 pt-0.5 truncate'>
+                      <Calendar className='h-2.5 w-2.5 text-gray-500 shrink-0' />
+                      <span className='truncate'>{formattedKickoff}</span>
                     </p>
                   </div>
 
@@ -249,14 +249,14 @@ export function PinnedGamesSection({
                     type='button'
                     onClick={() => handleUnpin(game.id)}
                     disabled={pendingUnpinId === game.id}
-                    className='inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-400 hover:text-rose-300 bg-white/5 hover:bg-rose-500/10 border border-white/10 hover:border-rose-500/20 transition-colors shrink-0'
+                    className='inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-gray-400 hover:text-rose-300 bg-white/5 hover:bg-rose-500/10 border border-white/10 hover:border-rose-500/20 transition-colors shrink-0'
                     title='Remove game from dashboard'
                   >
                     {pendingUnpinId === game.id ? (
-                      <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                      <Loader2 className='h-3 w-3 animate-spin' />
                     ) : (
                       <>
-                        <Trash2 className='h-3.5 w-3.5' />
+                        <Trash2 className='h-3 w-3' />
                         <span>Remove</span>
                       </>
                     )}
@@ -264,11 +264,11 @@ export function PinnedGamesSection({
                 </div>
 
                 {/* Matchup */}
-                <div className='space-y-2 py-0.5'>
+                <div className='space-y-1.5 py-0.5'>
                   {/* Away */}
-                  <div className='flex items-center justify-between gap-2.5'>
-                    <div className='flex items-center gap-2.5 min-w-0 flex-1'>
-                      <div className='relative h-8 w-8 shrink-0 bg-white/5 rounded-full p-1 border border-white/10'>
+                  <div className='flex items-center justify-between gap-2'>
+                    <div className='flex items-center gap-2 min-w-0 flex-1'>
+                      <div className='relative h-6 w-6 shrink-0 bg-white/5 rounded-full p-0.5 border border-white/10 flex items-center justify-center'>
                         <Image
                           src={game.awayTeam.logo}
                           alt={game.awayTeam.name}
@@ -279,26 +279,21 @@ export function PinnedGamesSection({
                       </div>
                       <div className='min-w-0'>
                         <span
-                          className={`text-sm truncate block ${
+                          className={`text-xs sm:text-[13px] truncate block ${
                             game.awayTeam.winner
-                              ? 'font-black text-emerald-300'
-                              : 'font-bold text-white'
+                              ? 'font-bold text-emerald-300'
+                              : 'font-medium text-white'
                           }`}
                         >
                           {game.awayTeam.rank ? `#${game.awayTeam.rank} ` : ''}
                           {game.awayTeam.name}
                         </span>
-                        {game.awayTeam.record && (
-                          <span className='text-[11px] text-gray-400'>
-                            {game.awayTeam.record} • Away
-                          </span>
-                        )}
                       </div>
                     </div>
 
                     {game.awayTeam.score !== undefined && (
                       <span
-                        className={`text-base font-black font-mono shrink-0 px-2 py-0.5 rounded-lg ${
+                        className={`text-xs sm:text-sm font-black font-mono shrink-0 px-1.5 py-0.2 rounded ${
                           game.awayTeam.winner
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : 'text-gray-300 bg-white/5'
@@ -310,9 +305,9 @@ export function PinnedGamesSection({
                   </div>
 
                   {/* Home */}
-                  <div className='flex items-center justify-between gap-2.5'>
-                    <div className='flex items-center gap-2.5 min-w-0 flex-1'>
-                      <div className='relative h-8 w-8 shrink-0 bg-white/5 rounded-full p-1 border border-white/10'>
+                  <div className='flex items-center justify-between gap-2'>
+                    <div className='flex items-center gap-2 min-w-0 flex-1'>
+                      <div className='relative h-6 w-6 shrink-0 bg-white/5 rounded-full p-0.5 border border-white/10 flex items-center justify-center'>
                         <Image
                           src={game.homeTeam.logo}
                           alt={game.homeTeam.name}
@@ -323,26 +318,21 @@ export function PinnedGamesSection({
                       </div>
                       <div className='min-w-0'>
                         <span
-                          className={`text-sm truncate block ${
+                          className={`text-xs sm:text-[13px] truncate block ${
                             game.homeTeam.winner
-                              ? 'font-black text-emerald-300'
-                              : 'font-bold text-white'
+                              ? 'font-bold text-emerald-300'
+                              : 'font-medium text-white'
                           }`}
                         >
                           {game.homeTeam.rank ? `#${game.homeTeam.rank} ` : ''}
                           {game.homeTeam.name}
                         </span>
-                        {game.homeTeam.record && (
-                          <span className='text-[11px] text-gray-400'>
-                            {game.homeTeam.record} • Home
-                          </span>
-                        )}
                       </div>
                     </div>
 
                     {game.homeTeam.score !== undefined && (
                       <span
-                        className={`text-base font-black font-mono shrink-0 px-2 py-0.5 rounded-lg ${
+                        className={`text-xs sm:text-sm font-black font-mono shrink-0 px-1.5 py-0.2 rounded ${
                           game.homeTeam.winner
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : 'text-gray-300 bg-white/5'
@@ -355,20 +345,20 @@ export function PinnedGamesSection({
                 </div>
 
                 {/* Footer Metadata & Box Score Trigger */}
-                <div className='border-t border-white/5 pt-2.5 flex items-center justify-between gap-2 text-[11px] text-gray-400 flex-wrap'>
-                  <div className='flex items-center gap-2 flex-wrap'>
+                <div className='border-t border-white/5 pt-1.5 flex items-center justify-between gap-1.5 text-[10px] text-gray-400'>
+                  <div className='flex items-center gap-1.5 truncate min-w-0 flex-1'>
                     {game.broadcastSummary ? (
-                      <span className='inline-flex items-center gap-1 text-emerald-400 font-semibold'>
-                        <Tv className='h-3 w-3' />
-                        <span>{game.broadcastSummary}</span>
+                      <span className='inline-flex items-center gap-1 text-emerald-400 font-medium truncate'>
+                        <Tv className='h-2.5 w-2.5 shrink-0' />
+                        <span className='truncate'>{game.broadcastSummary}</span>
                       </span>
                     ) : (
                       <span className='text-gray-500'>TV TBA</span>
                     )}
 
                     {game.odds?.details && (
-                      <span className='font-mono text-cyan-300/80'>
-                        🎲 {game.odds.details}
+                      <span className='hidden sm:inline font-mono text-cyan-300/80 shrink-0'>
+                        {game.odds.details}
                       </span>
                     )}
                   </div>
@@ -385,10 +375,10 @@ export function PinnedGamesSection({
                         league: game.leagueSlug || game.league,
                       })
                     }
-                    className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm'
+                    className='inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm shrink-0'
                     title='Open game linescore and box score statistics'
                   >
-                    <BarChart2 className='h-3.5 w-3.5 text-emerald-400' />
+                    <BarChart2 className='h-2.5 w-2.5 text-emerald-400' />
                     <span>Box Score</span>
                   </button>
                 </div>

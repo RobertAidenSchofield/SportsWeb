@@ -178,21 +178,21 @@ export function BoxScoreModal({
         {!loading && data && (
           <div className='space-y-6'>
             {/* Scoreboard Banner */}
-            <div className='rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-4 sm:p-5'>
+            <div className='rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-3 sm:p-4'>
               <div className='grid grid-cols-5 items-center gap-2'>
                 {/* Away Team */}
-                <div className='col-span-2 flex flex-col items-center text-center space-y-2'>
-                  <div className='relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-white/5 border border-white/10 p-2 shadow-inner flex items-center justify-center'>
+                <div className='col-span-2 flex flex-col items-center text-center space-y-1'>
+                  <div className='relative h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white/5 border border-white/10 p-1.5 shadow-inner flex items-center justify-center'>
                     {data.awayTeam.logo ? (
                       <Image
                         src={data.awayTeam.logo}
                         alt={data.awayTeam.name}
                         fill
-                        className='object-contain p-1'
+                        className='object-contain p-0.5'
                         unoptimized
                       />
                     ) : (
-                      <Trophy className='h-7 w-7 text-gray-400' />
+                      <Trophy className='h-5 w-5 text-gray-400' />
                     )}
                   </div>
                   <div>
@@ -200,23 +200,23 @@ export function BoxScoreModal({
                       {data.awayTeam.name}
                     </h4>
                     {data.awayTeam.record && (
-                      <p className='text-[11px] text-gray-400'>
+                      <p className='text-[10px] text-gray-400'>
                         {data.awayTeam.record} • Away
                       </p>
                     )}
                   </div>
                   {data.awayTeam.winner && (
-                    <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>
+                    <span className='px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>
                       WINNER
                     </span>
                   )}
                 </div>
 
                 {/* Score Center Column */}
-                <div className='col-span-1 flex flex-col items-center justify-center space-y-1'>
+                <div className='col-span-1 flex flex-col items-center justify-center space-y-0.5'>
                   {data.awayTeam.score !== undefined &&
                   data.homeTeam.score !== undefined ? (
-                    <div className='flex items-center gap-2 sm:gap-3 text-2xl sm:text-4xl font-black font-mono tracking-tight'>
+                    <div className='flex items-center gap-1.5 sm:gap-2.5 text-xl sm:text-3xl font-black font-mono tracking-tight'>
                       <span
                         className={
                           data.awayTeam.winner
@@ -226,7 +226,7 @@ export function BoxScoreModal({
                       >
                         {data.awayTeam.score}
                       </span>
-                      <span className='text-gray-600 text-lg font-light'>-</span>
+                      <span className='text-gray-600 text-base font-light'>-</span>
                       <span
                         className={
                           data.homeTeam.winner
@@ -238,29 +238,29 @@ export function BoxScoreModal({
                       </span>
                     </div>
                   ) : (
-                    <span className='text-gray-400 text-xs sm:text-sm font-semibold uppercase tracking-wider'>
+                    <span className='text-gray-400 text-xs font-semibold uppercase tracking-wider'>
                       VS
                     </span>
                   )}
 
-                  <span className='text-[11px] text-gray-400 text-center font-medium'>
+                  <span className='text-[10px] text-gray-400 text-center font-medium'>
                     {data.statusDetail || 'Scheduled'}
                   </span>
                 </div>
 
                 {/* Home Team */}
-                <div className='col-span-2 flex flex-col items-center text-center space-y-2'>
-                  <div className='relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-white/5 border border-white/10 p-2 shadow-inner flex items-center justify-center'>
+                <div className='col-span-2 flex flex-col items-center text-center space-y-1'>
+                  <div className='relative h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white/5 border border-white/10 p-1.5 shadow-inner flex items-center justify-center'>
                     {data.homeTeam.logo ? (
                       <Image
                         src={data.homeTeam.logo}
                         alt={data.homeTeam.name}
                         fill
-                        className='object-contain p-1'
+                        className='object-contain p-0.5'
                         unoptimized
                       />
                     ) : (
-                      <Trophy className='h-7 w-7 text-gray-400' />
+                      <Trophy className='h-5 w-5 text-gray-400' />
                     )}
                   </div>
                   <div>
@@ -268,13 +268,13 @@ export function BoxScoreModal({
                       {data.homeTeam.name}
                     </h4>
                     {data.homeTeam.record && (
-                      <p className='text-[11px] text-gray-400'>
+                      <p className='text-[10px] text-gray-400'>
                         {data.homeTeam.record} • Home
                       </p>
                     )}
                   </div>
                   {data.homeTeam.winner && (
-                    <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>
+                    <span className='px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>
                       WINNER
                     </span>
                   )}

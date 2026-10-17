@@ -97,32 +97,32 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const followedTeamIds = followedTeams.map((t) => t.id);
 
   return (
-    <div className='mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-7 sm:space-y-10'>
+    <div className='mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 sm:space-y-6'>
       {/* Top Header */}
-      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/10 pb-5 sm:pb-6'>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/10 pb-3 sm:pb-4'>
         <div>
-          <h1 className='text-xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-2 sm:gap-2.5'>
-            <Trophy className='h-6 w-6 sm:h-7 sm:w-7 text-emerald-400 shrink-0' />
+          <h1 className='text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2 sm:gap-2.5'>
+            <Trophy className='h-5 w-5 sm:h-6 sm:w-6 text-emerald-400 shrink-0' />
             Sports Digest Dashboard
           </h1>
-          <p className='text-xs sm:text-sm text-gray-400 mt-1 truncate max-w-xl'>
+          <p className='text-xs text-gray-400 mt-0.5 truncate max-w-xl'>
             Managing digest for{' '}
             <span className='text-white font-medium'>{userEmail}</span>
           </p>
         </div>
 
         {/* Header Right Actions: Weekly View Button + Timezone Selector */}
-        <div className='flex items-center gap-2.5 flex-wrap w-full sm:w-auto'>
+        <div className='flex items-center gap-2 flex-wrap w-full sm:w-auto'>
           <a
             href='#weekly'
-            className='inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all shadow-sm'
+            className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all shadow-sm'
             title='View weekly schedule with box scores'
           >
-            <CalendarDays className='h-4 w-4 text-emerald-400' />
+            <CalendarDays className='h-3.5 w-3.5 text-emerald-400' />
             <span>Weekly View</span>
           </a>
 
-          <div className='bg-white/5 border border-white/10 rounded-xl p-2.5 flex-1 sm:flex-initial'>
+          <div className='bg-white/5 border border-white/10 rounded-xl p-1.5 flex-1 sm:flex-initial'>
             <TimezoneSelector initialTimezone={userTimezone} />
           </div>
         </div>

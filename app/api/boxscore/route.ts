@@ -180,10 +180,10 @@ export async function GET(req: NextRequest) {
           homeComp?.team?.logos?.[0]?.href ||
           homeComp?.team?.logo ||
           `https://a.espncdn.com/i/teamlogos/${sport}/500/${homeComp?.team?.id}.png`,
-        score: extractScore(homeComp),
+        score: (isLive || isCompleted) ? extractScore(homeComp) : undefined,
         record: homeComp?.record?.[0]?.displayValue || homeComp?.records?.[0]?.summary,
         winner: homeComp?.winner === true,
-        linescores: homeLinescores,
+        linescores: (isLive || isCompleted) ? homeLinescores : [],
       },
       awayTeam: {
         id: awayComp?.team?.id || '',
@@ -193,10 +193,10 @@ export async function GET(req: NextRequest) {
           awayComp?.team?.logos?.[0]?.href ||
           awayComp?.team?.logo ||
           `https://a.espncdn.com/i/teamlogos/${sport}/500/${awayComp?.team?.id}.png`,
-        score: extractScore(awayComp),
+        score: (isLive || isCompleted) ? extractScore(awayComp) : undefined,
         record: awayComp?.record?.[0]?.displayValue || awayComp?.records?.[0]?.summary,
         winner: awayComp?.winner === true,
-        linescores: awayLinescores,
+        linescores: (isLive || isCompleted) ? awayLinescores : [],
       },
       stats,
       leaders,

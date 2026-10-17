@@ -186,6 +186,50 @@ export default async function SharePage({ params, searchParams }: PageProps) {
         const existing = fixtureMap.get(key)!;
         existing.isPinned = true;
       } else {
+        if (!converted.isLive && !converted.isCompleted && gameTime > Date.now()) {
+          converted.teamScore = undefined;
+          converted.opponentScore = undefined;
+        } else if (
+          gameTime <= Date.now() + 15 * 60 * 1000 ||
+          converted.isLive ||
+          converted.isCompleted ||
+          (String(converted.teamScore) === '0' && String(converted.opponentScore) === '0')
+        ) {
+          try {
+            const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/${converted.sport}/${converted.league}/summary?event=${key}`;
+            const sumRes = await fetch(sumUrl, { next: { revalidate: 60 } });
+            if (sumRes.ok) {
+              const sumData = await sumRes.json();
+              const sumComp = sumData.header?.competitions?.[0];
+              if (sumComp) {
+                const homeC =
+                  sumComp.competitors?.find((c: any) => c.homeAway === 'home') ||
+                  sumComp.competitors?.[0];
+                const awayC =
+                  sumComp.competitors?.find((c: any) => c.homeAway === 'away') ||
+                  sumComp.competitors?.[1];
+                if (
+                  homeC &&
+                  awayC &&
+                  (sumComp.status?.type?.state === 'in' ||
+                    sumComp.status?.type?.completed)
+                ) {
+                  converted.teamScore =
+                    homeC.score !== undefined ? String(homeC.score) : undefined;
+                  converted.opponentScore =
+                    awayC.score !== undefined ? String(awayC.score) : undefined;
+                  converted.teamWinner = Boolean(homeC.winner);
+                  converted.opponentWinner = Boolean(awayC.winner);
+                  converted.isLive = sumComp.status?.type?.state === 'in';
+                  converted.isCompleted = Boolean(sumComp.status?.type?.completed);
+                  converted.statusDetail =
+                    sumComp.status?.type?.detail ||
+                    sumComp.status?.type?.description;
+                }
+              }
+            }
+          } catch {}
+        }
         fixtureMap.set(key, converted);
       }
     }

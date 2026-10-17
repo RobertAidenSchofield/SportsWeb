@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import {
   Pin,
@@ -12,10 +12,14 @@ import {
   Loader2,
   Flame,
   ArrowRight,
+  BarChart2,
+  CheckCircle2,
 } from 'lucide-react';
 import { MarqueeGame } from '@/lib/types';
 import { unpinGame } from '@/app/actions';
 import { formatInTimeZone } from 'date-fns-tz';
+import { getLeagueDisplayName } from '@/lib/sportsApi';
+import { BoxScoreModal } from './BoxScoreModal';
 
 interface PinnedGamesSectionProps {
   initialPinnedGames: MarqueeGame[];
@@ -33,6 +37,82 @@ export function PinnedGamesSection({
   const [pinnedGames, setPinnedGames] =
     useState<MarqueeGame[]>(initialPinnedGames);
   const [pendingUnpinId, setPendingUnpinId] = useState<string | null>(null);
+  const [selectedBoxScore, setSelectedBoxScore] = useState<{
+    eventId: string;
+    sport: string;
+    league: string;
+  } | null>(null);
+
+  // Fetch real-time live and final scores for any started pinned games
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function enrichScores() {
+      const updated = await Promise.all(
+        initialPinnedGames.map(async (game) => {
+          const startTime = new Date(game.dateUtc).getTime();
+          const hasStarted = startTime <= Date.now() + 15 * 60 * 1000;
+          if (
+            hasStarted ||
+            game.isLive ||
+            game.isCompleted ||
+            (String(game.homeTeam.score) === '0' && String(game.awayTeam.score) === '0')
+          ) {
+            try {
+              const cleanId = game.id.includes(':')
+                ? game.id.split(':').pop()!
+                : game.id;
+              const res = await fetch(
+                `/api/boxscore?sport=${encodeURIComponent(game.sport)}&league=${encodeURIComponent(game.leagueSlug || game.league)}&eventId=${encodeURIComponent(cleanId)}`,
+              );
+              if (res.ok) {
+                const bData = await res.json();
+                return {
+                  ...game,
+                  homeTeam: {
+                    ...game.homeTeam,
+                    score: bData.homeTeam?.score,
+                    winner: bData.homeTeam?.winner,
+                  },
+                  awayTeam: {
+                    ...game.awayTeam,
+                    score: bData.awayTeam?.score,
+                    winner: bData.awayTeam?.winner,
+                  },
+                  statusDetail: bData.statusDetail || game.statusDetail,
+                  isCompleted: Boolean(bData.isCompleted),
+                  isLive: Boolean(bData.isLive),
+                };
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          // If the game has not started, ensure it doesn't display placeholder 0s
+          if (!hasStarted && !game.isLive && !game.isCompleted) {
+            return {
+              ...game,
+              homeTeam: { ...game.homeTeam, score: undefined },
+              awayTeam: { ...game.awayTeam, score: undefined },
+            };
+          }
+
+          return game;
+        }),
+      );
+
+      if (!isCancelled) {
+        setPinnedGames(updated);
+      }
+    }
+
+    enrichScores();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [initialPinnedGames]);
 
   const handleUnpin = async (gameId: string) => {
     setPendingUnpinId(gameId);
@@ -138,12 +218,25 @@ export function PinnedGamesSection({
                   <div className='space-y-0.5'>
                     <div className='flex items-center gap-2 flex-wrap'>
                       <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white uppercase tracking-wider'>
-                        {game.league}
+                        {getLeagueDisplayName(game.leagueSlug || game.league)}
                       </span>
-                      <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30'>
-                        <Flame className='h-3 w-3 text-amber-400' />
-                        <span>{game.excitementScore}/100</span>
-                      </span>
+
+                      {game.isLive ? (
+                        <span className='inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30'>
+                          <span className='h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse' />
+                          <span>LIVE {game.statusDetail ? `• ${game.statusDetail}` : ''}</span>
+                        </span>
+                      ) : game.isCompleted ? (
+                        <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'>
+                          <CheckCircle2 className='h-3 w-3 text-emerald-400' />
+                          <span>{game.statusDetail || 'FINAL'}</span>
+                        </span>
+                      ) : (
+                        <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30'>
+                          <Flame className='h-3 w-3 text-amber-400' />
+                          <span>{game.excitementScore}/100</span>
+                        </span>
+                      )}
                     </div>
                     <p className='text-xs text-gray-400 font-medium flex items-center gap-1.5 pt-1'>
                       <Calendar className='h-3.5 w-3.5 text-gray-500' />
@@ -174,7 +267,7 @@ export function PinnedGamesSection({
                 <div className='space-y-2 py-0.5'>
                   {/* Away */}
                   <div className='flex items-center justify-between gap-2.5'>
-                    <div className='flex items-center gap-2.5 min-w-0'>
+                    <div className='flex items-center gap-2.5 min-w-0 flex-1'>
                       <div className='relative h-8 w-8 shrink-0 bg-white/5 rounded-full p-1 border border-white/10'>
                         <Image
                           src={game.awayTeam.logo}
@@ -185,7 +278,13 @@ export function PinnedGamesSection({
                         />
                       </div>
                       <div className='min-w-0'>
-                        <span className='font-bold text-white text-sm truncate block'>
+                        <span
+                          className={`text-sm truncate block ${
+                            game.awayTeam.winner
+                              ? 'font-black text-emerald-300'
+                              : 'font-bold text-white'
+                          }`}
+                        >
                           {game.awayTeam.rank ? `#${game.awayTeam.rank} ` : ''}
                           {game.awayTeam.name}
                         </span>
@@ -196,11 +295,23 @@ export function PinnedGamesSection({
                         )}
                       </div>
                     </div>
+
+                    {game.awayTeam.score !== undefined && (
+                      <span
+                        className={`text-base font-black font-mono shrink-0 px-2 py-0.5 rounded-lg ${
+                          game.awayTeam.winner
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'text-gray-300 bg-white/5'
+                        }`}
+                      >
+                        {game.awayTeam.score}
+                      </span>
+                    )}
                   </div>
 
                   {/* Home */}
                   <div className='flex items-center justify-between gap-2.5'>
-                    <div className='flex items-center gap-2.5 min-w-0'>
+                    <div className='flex items-center gap-2.5 min-w-0 flex-1'>
                       <div className='relative h-8 w-8 shrink-0 bg-white/5 rounded-full p-1 border border-white/10'>
                         <Image
                           src={game.homeTeam.logo}
@@ -211,7 +322,13 @@ export function PinnedGamesSection({
                         />
                       </div>
                       <div className='min-w-0'>
-                        <span className='font-bold text-white text-sm truncate block'>
+                        <span
+                          className={`text-sm truncate block ${
+                            game.homeTeam.winner
+                              ? 'font-black text-emerald-300'
+                              : 'font-bold text-white'
+                          }`}
+                        >
                           {game.homeTeam.rank ? `#${game.homeTeam.rank} ` : ''}
                           {game.homeTeam.name}
                         </span>
@@ -222,36 +339,73 @@ export function PinnedGamesSection({
                         )}
                       </div>
                     </div>
+
+                    {game.homeTeam.score !== undefined && (
+                      <span
+                        className={`text-base font-black font-mono shrink-0 px-2 py-0.5 rounded-lg ${
+                          game.homeTeam.winner
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'text-gray-300 bg-white/5'
+                        }`}
+                      >
+                        {game.homeTeam.score}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Footer Metadata */}
-                <div className='border-t border-white/5 pt-2.5 flex items-center justify-between text-[11px] text-gray-400'>
-                  {game.broadcastSummary ? (
-                    <span className='inline-flex items-center gap-1 text-emerald-400 font-semibold'>
-                      <Tv className='h-3 w-3' />
-                      <span>{game.broadcastSummary}</span>
-                    </span>
-                  ) : (
-                    <span className='text-gray-500'>TV TBA</span>
-                  )}
+                {/* Footer Metadata & Box Score Trigger */}
+                <div className='border-t border-white/5 pt-2.5 flex items-center justify-between gap-2 text-[11px] text-gray-400 flex-wrap'>
+                  <div className='flex items-center gap-2 flex-wrap'>
+                    {game.broadcastSummary ? (
+                      <span className='inline-flex items-center gap-1 text-emerald-400 font-semibold'>
+                        <Tv className='h-3 w-3' />
+                        <span>{game.broadcastSummary}</span>
+                      </span>
+                    ) : (
+                      <span className='text-gray-500'>TV TBA</span>
+                    )}
 
-                  {game.odds?.details && (
-                    <span className='font-mono text-cyan-300/80'>
-                      🎲 {game.odds.details}
-                    </span>
-                  )}
+                    {game.odds?.details && (
+                      <span className='font-mono text-cyan-300/80'>
+                        🎲 {game.odds.details}
+                      </span>
+                    )}
+                  </div>
 
-                  {game.venue && (
-                    <span className='truncate max-w-[130px] text-gray-400'>
-                      📍 {game.venue}
-                    </span>
-                  )}
+                  {/* Box Score Button */}
+                  <button
+                    type='button'
+                    onClick={() =>
+                      setSelectedBoxScore({
+                        eventId: game.id.includes(':')
+                          ? game.id.split(':').pop()!
+                          : game.id,
+                        sport: game.sport,
+                        league: game.leagueSlug || game.league,
+                      })
+                    }
+                    className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm'
+                    title='Open game linescore and box score statistics'
+                  >
+                    <BarChart2 className='h-3.5 w-3.5 text-emerald-400' />
+                    <span>Box Score</span>
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {selectedBoxScore && (
+        <BoxScoreModal
+          isOpen={Boolean(selectedBoxScore)}
+          onClose={() => setSelectedBoxScore(null)}
+          eventId={selectedBoxScore.eventId}
+          sport={selectedBoxScore.sport}
+          league={selectedBoxScore.league}
+        />
       )}
     </section>
   );

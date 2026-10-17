@@ -100,14 +100,16 @@ export function SchedulePreview({
           const getCleanEventId = (f: MatchFixture) =>
             f.eventId || (f.id.includes(':') ? f.id.split(':').pop()! : f.id);
 
-          // For any pinned game that has started or is completed but lacks score, fetch fresh box score
+          // For any pinned game, ensure live/final games get real box scores, and scheduled games don't show 0-0
           const enrichedPinned = await Promise.all(
             convertedPinned.map(async (p) => {
               const startTime = new Date(p.dateUtc).getTime();
               const hasStarted = startTime <= Date.now() + 15 * 60 * 1000;
               if (
-                hasStarted &&
-                (p.teamScore === undefined || p.opponentScore === undefined)
+                hasStarted ||
+                p.isLive ||
+                p.isCompleted ||
+                (String(p.teamScore) === '0' && String(p.opponentScore) === '0')
               ) {
                 try {
                   const evId = getCleanEventId(p);
@@ -131,6 +133,16 @@ export function SchedulePreview({
                   // ignore fallback error
                 }
               }
+
+              // If the game has not started and is not live/completed, clear any placeholder 0s
+              if (!hasStarted && !p.isLive && !p.isCompleted) {
+                return {
+                  ...p,
+                  teamScore: undefined,
+                  opponentScore: undefined,
+                };
+              }
+
               return p;
             }),
           );

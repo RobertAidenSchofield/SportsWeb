@@ -1434,26 +1434,28 @@ export async function getTopLeagueGames(
           const defaultLogo = (id: string, abbrev?: string) =>
             `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbrev?.toLowerCase() || id}.png`;
 
-          const homeScoreStr =
-            homeComp.score?.displayValue ??
-            (typeof homeComp.score === 'string' ||
-            typeof homeComp.score === 'number'
-              ? String(homeComp.score)
-              : undefined);
-
-          const awayScoreStr =
-            awayComp.score?.displayValue ??
-            (typeof awayComp.score === 'string' ||
-            typeof awayComp.score === 'number'
-              ? String(awayComp.score)
-              : undefined);
-
           const isCompleted = Boolean(competition.status?.type?.completed);
           const isLive = competition.status?.type?.state === 'in';
           const statusDetail =
             competition.status?.type?.detail ||
             competition.status?.type?.description ||
             (isCompleted ? 'Final' : undefined);
+
+          const homeScoreStr = (isLive || isCompleted)
+            ? (homeComp.score?.displayValue ??
+               (homeComp.score?.value !== undefined ? String(homeComp.score.value) : undefined) ??
+               (typeof homeComp.score === 'string' || typeof homeComp.score === 'number'
+                 ? String(homeComp.score)
+                 : undefined))
+            : undefined;
+
+          const awayScoreStr = (isLive || isCompleted)
+            ? (awayComp.score?.displayValue ??
+               (awayComp.score?.value !== undefined ? String(awayComp.score.value) : undefined) ??
+               (typeof awayComp.score === 'string' || typeof awayComp.score === 'number'
+                 ? String(awayComp.score)
+                 : undefined))
+            : undefined;
 
           const homeTeam: MarqueeTeam = {
             id: `espn:${sport}:${league}:${homeComp.team.id}`,

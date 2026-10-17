@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { BoxScoreData, BoxScoreStat } from '@/lib/types';
 import { normalizeLeagueAndSport, getLeagueDisplayName } from '@/lib/sportsApi';
 
+export const dynamic = 'force-dynamic';
+
 function extractScore(comp: any): string | undefined {
   if (!comp) return undefined;
   if (comp.score?.displayValue !== undefined && comp.score?.displayValue !== null) {
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
 
   try {
     let summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/summary?event=${eventId}`;
-    let res = await fetch(summaryUrl, { next: { revalidate: 60 } });
+    let res = await fetch(summaryUrl, { next: { revalidate: 15 } });
 
     // Fallback attempt: if 400/404 and college sport or soccer, check common alternate slugs
     if (!res.ok && (res.status === 400 || res.status === 404)) {
@@ -68,7 +70,7 @@ export async function GET(req: NextRequest) {
       for (const cand of candidates) {
         if (cand.s === sport && cand.l === league) continue;
         const altUrl = `https://site.api.espn.com/apis/site/v2/sports/${cand.s}/${cand.l}/summary?event=${eventId}`;
-        const altRes = await fetch(altUrl, { next: { revalidate: 60 } });
+        const altRes = await fetch(altUrl, { next: { revalidate: 15 } });
         if (altRes.ok) {
           res = altRes;
           break;
@@ -202,7 +204,11 @@ export async function GET(req: NextRequest) {
       leaders,
     };
 
-    return NextResponse.json(boxScoreResponse);
+    return NextResponse.json(boxScoreResponse, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching box score from ESPN:', error);
     return NextResponse.json(

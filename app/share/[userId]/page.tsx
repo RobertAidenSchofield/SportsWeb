@@ -192,7 +192,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
         ) {
           try {
             const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/${converted.sport}/${converted.league}/summary?event=${key}`;
-            const sumRes = await fetch(sumUrl, { next: { revalidate: 60 } });
+            const sumRes = await fetch(sumUrl, { next: { revalidate: 15 } });
             if (sumRes.ok) {
               const sumData = await sumRes.json();
               const sumComp = sumData.header?.competitions?.[0];

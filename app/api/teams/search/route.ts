@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchTeams, getUpcomingTeamFixtures } from '@/lib/sportsApi';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const query = searchParams.get('q') || '';
@@ -10,7 +12,14 @@ export async function GET(req: NextRequest) {
   try {
     if (scheduleTeamId) {
       const fixtures = await getUpcomingTeamFixtures(scheduleTeamId, 7);
-      return NextResponse.json({ fixtures });
+      return NextResponse.json(
+        { fixtures },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          },
+        },
+      );
     }
 
     const teams = await searchTeams(query, league);

@@ -773,7 +773,7 @@ export async function getUpcomingTeamFixtures(
 
   try {
     const scheduleUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/teams/${rawId}/schedule`;
-    const res = await fetch(scheduleUrl, { next: { revalidate: 300 } });
+    const res = await fetch(scheduleUrl, { next: { revalidate: 60 } });
     if (!res.ok) {
       return [];
     }
@@ -845,15 +845,25 @@ export async function getUpcomingTeamFixtures(
         competition.status?.type?.description ||
         (isCompleted ? 'Final' : undefined);
 
-      // If game has started, is live, or completed, but team schedule endpoint lacks score:
-      const hasStarted = eventDate <= now;
+      // If game has started, is live, recently completed, or lacks live score, fetch fresh summary
+      const startTimeMs = eventDate.getTime();
+      const hasStartedOrLive =
+        isLive ||
+        isCompleted ||
+        startTimeMs <= now.getTime() + 15 * 60 * 1000;
+      const isRecentGame =
+        hasStartedOrLive && now.getTime() - startTimeMs < 48 * 60 * 60 * 1000;
+
       if (
-        (isLive || isCompleted || hasStarted) &&
-        (currentScore === undefined || opponentScore === undefined)
+        isRecentGame ||
+        isLive ||
+        currentScore === undefined ||
+        opponentScore === undefined ||
+        (currentScore === '0' && opponentScore === '0')
       ) {
         try {
           const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/summary?event=${event.id}`;
-          const sumRes = await fetch(summaryUrl, { next: { revalidate: 60 } });
+          const sumRes = await fetch(summaryUrl, { next: { revalidate: 15 } });
           if (sumRes.ok) {
             const sumData = await sumRes.json();
             const sumComp = sumData.header?.competitions?.[0];
@@ -891,13 +901,19 @@ export async function getUpcomingTeamFixtures(
                 statusDetail =
                   sumComp.status.type.detail ||
                   sumComp.status.type.description ||
-                  (isCompleted ? 'Final' : undefined);
+                  (isCompleted ? 'Final' : isLive ? 'LIVE' : statusDetail);
               }
             }
           }
         } catch {
           // non-fatal summary lookup fallback
         }
+      }
+
+      // If scheduled game has not started and is not live, clear placeholder zeros
+      if (!hasStartedOrLive && !isLive && !isCompleted) {
+        currentScore = undefined;
+        opponentScore = undefined;
       }
 
       const oddsDetails = competition.odds?.[0]?.details;

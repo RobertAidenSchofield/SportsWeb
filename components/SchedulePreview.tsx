@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import {
   Calendar,
@@ -15,6 +15,7 @@ import {
   Filter,
   Share2,
   Bookmark,
+  RefreshCw,
 } from 'lucide-react';
 import {
   MatchFixture,
@@ -46,6 +47,8 @@ export function SchedulePreview({
 }: SchedulePreviewProps) {
   const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'upcoming' | 'final'>('all');
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedBoxScore, setSelectedBoxScore] = useState<{
@@ -54,23 +57,39 @@ export function SchedulePreview({
     league: string;
   } | null>(null);
 
-  useEffect(() => {
-    let isCancelled = false;
+  const getCleanEventId = useCallback((f: MatchFixture) => {
+    return f.eventId || (f.id.includes(':') ? f.id.split(':').pop()! : f.id);
+  }, []);
 
-    async function loadSchedule() {
+  const loadSchedule = useCallback(
+    async (isBackground = false) => {
       if (teams.length === 0 && pinnedGames.length === 0) {
         setFixtures([]);
         setLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
-      setLoading(true);
+      if (isBackground) {
+        setIsRefreshing(true);
+      } else {
+        setFixtures((prev) => {
+          if (prev.length === 0) setLoading(true);
+          else setIsRefreshing(true);
+          return prev;
+        });
+      }
+
       try {
+        const nowMs = Date.now() - 7 * 24 * 3600 * 1000;
+        const maxMs = Date.now() + 8 * 24 * 3600 * 1000;
+
+        // 1. Fetch fixtures for all followed teams
         const fixturePromises = teams.map(async (team) => {
           try {
-            // Fetch fixtures from ESPN endpoint (now includes current week games + upcoming 7 days)
             const res = await fetch(
-              `/api/teams/search?scheduleTeamId=${encodeURIComponent(team.id)}`,
+              `/api/teams/search?scheduleTeamId=${encodeURIComponent(team.id)}&_t=${Date.now()}`,
+              { cache: 'no-store' },
             );
             if (res.ok) {
               const data = await res.json();
@@ -83,114 +102,163 @@ export function SchedulePreview({
         });
 
         const nested = await Promise.all(fixturePromises);
-        if (!isCancelled) {
-          // Flatten followed teams fixtures
-          const all = nested.flat();
+        const allFollowed = nested.flat();
 
-          // Merge pinned individual games (past 7 days to 8 days ahead)
-          const nowMs = Date.now() - 7 * 24 * 3600 * 1000;
-          const maxMs = Date.now() + 8 * 24 * 3600 * 1000;
-          const convertedPinned = pinnedGames
-            .map(marqueeToMatchFixture)
-            .filter((f) => {
-              const t = new Date(f.dateUtc).getTime();
-              return t >= nowMs && t <= maxMs;
-            });
+        // 2. Convert pinned individual games
+        const convertedPinned = pinnedGames
+          .map(marqueeToMatchFixture)
+          .filter((f) => {
+            const t = new Date(f.dateUtc).getTime();
+            return t >= nowMs && t <= maxMs;
+          });
 
-          const getCleanEventId = (f: MatchFixture) =>
-            f.eventId || (f.id.includes(':') ? f.id.split(':').pop()! : f.id);
+        // 3. Deduplicate by event ID
+        const fixtureMap = new Map<string, MatchFixture>();
 
-          // For any pinned game, ensure live/final games get real box scores, and scheduled games don't show 0-0
-          const enrichedPinned = await Promise.all(
-            convertedPinned.map(async (p) => {
-              const startTime = new Date(p.dateUtc).getTime();
-              const hasStarted = startTime <= Date.now() + 15 * 60 * 1000;
-              if (
-                hasStarted ||
-                p.isLive ||
-                p.isCompleted ||
-                (String(p.teamScore) === '0' && String(p.opponentScore) === '0')
-              ) {
-                try {
-                  const evId = getCleanEventId(p);
-                  const bRes = await fetch(
-                    `/api/boxscore?sport=${encodeURIComponent(p.sport)}&league=${encodeURIComponent(p.league)}&eventId=${encodeURIComponent(evId)}`,
-                  );
-                  if (bRes.ok) {
-                    const bData = await bRes.json();
-                    return {
-                      ...p,
-                      teamScore: bData.homeTeam?.score,
-                      opponentScore: bData.awayTeam?.score,
-                      teamWinner: bData.homeTeam?.winner,
-                      opponentWinner: bData.awayTeam?.winner,
-                      statusDetail: bData.statusDetail || p.statusDetail,
-                      isCompleted: Boolean(bData.isCompleted),
-                      isLive: Boolean(bData.isLive),
-                    };
-                  }
-                } catch {
-                  // ignore fallback error
-                }
-              }
-
-              // If the game has not started and is not live/completed, clear any placeholder 0s
-              if (!hasStarted && !p.isLive && !p.isCompleted) {
-                return {
-                  ...p,
-                  teamScore: undefined,
-                  opponentScore: undefined,
-                };
-              }
-
-              return p;
-            }),
-          );
-
-          if (isCancelled) return;
-
-          // Deduplicate by clean event ID
-          const fixtureMap = new Map<string, MatchFixture>();
-
-          // Followed team fixtures take precedence for fresh schedule data
-          for (const f of all) {
-            const key = getCleanEventId(f);
-            fixtureMap.set(key, f);
-          }
-
-          // Merge pinned games
-          for (const p of enrichedPinned) {
-            const key = getCleanEventId(p);
-            if (fixtureMap.has(key)) {
-              const existing = fixtureMap.get(key)!;
-              existing.isPinned = true;
-            } else {
-              fixtureMap.set(key, p);
-            }
-          }
-
-          const unified = Array.from(fixtureMap.values());
-          unified.sort(
-            (a, b) =>
-              new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
-          );
-          setFixtures(unified);
+        for (const f of allFollowed) {
+          const key = getCleanEventId(f);
+          fixtureMap.set(key, { ...f });
         }
+
+        for (const p of convertedPinned) {
+          const key = getCleanEventId(p);
+          if (fixtureMap.has(key)) {
+            const existing = fixtureMap.get(key)!;
+            existing.isPinned = true;
+            if (p.excitementScore) existing.excitementScore = p.excitementScore;
+            if (p.highlightTags) existing.highlightTags = p.highlightTags;
+            if (p.oddsDetails) existing.oddsDetails = p.oddsDetails;
+          } else {
+            fixtureMap.set(key, { ...p, isPinned: true });
+          }
+        }
+
+        const unified = Array.from(fixtureMap.values());
+        const now = Date.now();
+
+        // 4. Enrich ANY fixture (followed team or pinned) that has started, is live, recently completed (<48h),
+        // or has 0-0 placeholder
+        const enriched = await Promise.all(
+          unified.map(async (f) => {
+            const startTime = new Date(f.dateUtc).getTime();
+            const hasStartedOrLive =
+              f.isLive ||
+              f.isCompleted ||
+              startTime <= now + 20 * 60 * 1000;
+            const isRecentGame =
+              hasStartedOrLive && now - startTime < 48 * 60 * 60 * 1000;
+
+            const needsBoxScore =
+              f.isLive ||
+              isRecentGame ||
+              (String(f.teamScore) === '0' && String(f.opponentScore) === '0') ||
+              (hasStartedOrLive &&
+                (f.teamScore === undefined || f.opponentScore === undefined));
+
+            if (needsBoxScore) {
+              try {
+                const evId = getCleanEventId(f);
+                const bRes = await fetch(
+                  `/api/boxscore?sport=${encodeURIComponent(f.sport)}&league=${encodeURIComponent(f.league)}&eventId=${encodeURIComponent(evId)}&_t=${now}`,
+                  { cache: 'no-store' },
+                );
+                if (bRes.ok) {
+                  const bData = await bRes.json();
+                  const isHome = f.isHome;
+                  const myScore = isHome
+                    ? bData.homeTeam?.score
+                    : bData.awayTeam?.score;
+                  const oppScore = isHome
+                    ? bData.awayTeam?.score
+                    : bData.homeTeam?.score;
+                  const myWinner = isHome
+                    ? bData.homeTeam?.winner
+                    : bData.awayTeam?.winner;
+                  const oppWinner = isHome
+                    ? bData.awayTeam?.winner
+                    : bData.homeTeam?.winner;
+
+                  return {
+                    ...f,
+                    teamScore:
+                      bData.isLive || bData.isCompleted ? myScore : undefined,
+                    opponentScore:
+                      bData.isLive || bData.isCompleted ? oppScore : undefined,
+                    teamWinner: myWinner,
+                    opponentWinner: oppWinner,
+                    statusDetail: bData.statusDetail || f.statusDetail,
+                    isCompleted: Boolean(bData.isCompleted),
+                    isLive: Boolean(bData.isLive),
+                  };
+                }
+              } catch (e) {
+                // non-fatal
+              }
+            }
+
+            // If the game has not started and is not live/completed, clear any placeholder 0s
+            if (!hasStartedOrLive && !f.isLive && !f.isCompleted) {
+              return {
+                ...f,
+                teamScore: undefined,
+                opponentScore: undefined,
+              };
+            }
+
+            return f;
+          }),
+        );
+
+        enriched.sort(
+          (a, b) =>
+            new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
+        );
+
+        setFixtures(enriched);
+        setLastUpdated(new Date());
       } catch (err) {
         console.error('Failed to load upcoming fixtures:', err);
       } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
+        setLoading(false);
+        setIsRefreshing(false);
       }
-    }
+    },
+    [teams, pinnedGames, getCleanEventId],
+  );
 
-    loadSchedule();
+  // Initial load
+  useEffect(() => {
+    loadSchedule(false);
+  }, [loadSchedule]);
 
-    return () => {
-      isCancelled = true;
+  // Background auto-polling (every 25s when live games exist, 60s otherwise)
+  useEffect(() => {
+    const hasLiveGames = fixtures.some((f) => f.isLive);
+    const intervalMs = hasLiveGames ? 25 * 1000 : 60 * 1000;
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      loadSchedule(true);
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [fixtures, loadSchedule]);
+
+  // Instant refresh when user returns to tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadSchedule(true);
+      }
     };
-  }, [teams, pinnedGames]);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadSchedule]);
 
   // Filter fixtures based on mode (all vs upcoming vs final)
   const filteredFixtures = useMemo(() => {
@@ -346,6 +414,21 @@ export function SchedulePreview({
         </div>
 
         <div className='flex items-center gap-2 flex-wrap'>
+          <button
+            type='button'
+            onClick={() => loadSchedule(false)}
+            disabled={isRefreshing}
+            className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-all shadow-sm disabled:opacity-60'
+            title='Refresh live scores now'
+          >
+            <RefreshCw
+              className={`h-3 w-3 text-emerald-400 ${
+                isRefreshing ? 'animate-spin' : ''
+              }`}
+            />
+            <span>{isRefreshing ? 'Updating...' : 'Refresh'}</span>
+          </button>
+
           {userId && (
             <button
               type='button'
@@ -358,7 +441,26 @@ export function SchedulePreview({
             </button>
           )}
 
-          <div className='text-[10px] text-gray-400 px-1'>
+          {lastUpdated && (
+            <div className='text-[10px] text-gray-400 px-1 hidden sm:flex items-center gap-1.5'>
+              {fixtures.some((f) => f.isLive) ? (
+                <span className='inline-flex items-center gap-1 text-rose-400 font-semibold'>
+                  <span className='h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse' />
+                  Live Sync
+                </span>
+              ) : (
+                <span className='inline-flex items-center gap-1 text-emerald-400/80'>
+                  <span className='h-1.5 w-1.5 rounded-full bg-emerald-400' />
+                  Live
+                </span>
+              )}
+              <span>
+                {formatInTimeZone(lastUpdated, userTimezone, 'h:mm:ss a')}
+              </span>
+            </div>
+          )}
+
+          <div className='text-[10px] text-gray-400 px-1 hidden md:block'>
             <span>Times in <strong className='text-gray-300'>{userTimezone}</strong></span>
           </div>
         </div>

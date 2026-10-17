@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import {
   Calendar,
@@ -15,6 +15,7 @@ import {
   ExternalLink,
   CalendarDays,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { MatchFixture, Team, MarqueeGame } from '@/lib/types';
 import { getLeagueDisplayName } from '@/lib/sportsApi';
@@ -38,6 +39,9 @@ export function ShareScheduleView({
   pinnedGames = [],
   isEmbed = false,
 }: ShareScheduleViewProps) {
+  const [fixturesList, setFixturesList] = useState<MatchFixture[]>(fixtures);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'upcoming' | 'final'>('all');
   const [selectedBoxScore, setSelectedBoxScore] = useState<{
     eventId: string;
@@ -45,6 +49,101 @@ export function ShareScheduleView({
     league: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setFixturesList(fixtures);
+  }, [fixtures]);
+
+  const getCleanEventId = useCallback((f: MatchFixture) => {
+    return f.eventId || (f.id.includes(':') ? f.id.split(':').pop()! : f.id);
+  }, []);
+
+  const refreshLiveScores = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const now = Date.now();
+      const updated = await Promise.all(
+        fixturesList.map(async (fixture) => {
+          const startTime = new Date(fixture.dateUtc).getTime();
+          const hasStartedOrLive =
+            fixture.isLive ||
+            fixture.isCompleted ||
+            startTime <= now + 20 * 60 * 1000;
+          const isRecentGame =
+            hasStartedOrLive && now - startTime < 48 * 60 * 60 * 1000;
+
+          const needsBoxScore =
+            fixture.isLive ||
+            isRecentGame ||
+            (String(fixture.teamScore) === '0' && String(fixture.opponentScore) === '0') ||
+            (hasStartedOrLive &&
+              (fixture.teamScore === undefined || fixture.opponentScore === undefined));
+
+          if (needsBoxScore) {
+            try {
+              const evId = getCleanEventId(fixture);
+              const bRes = await fetch(
+                `/api/boxscore?sport=${encodeURIComponent(fixture.sport)}&league=${encodeURIComponent(fixture.league)}&eventId=${encodeURIComponent(evId)}&_t=${now}`,
+                { cache: 'no-store' },
+              );
+              if (bRes.ok) {
+                const bData = await bRes.json();
+                const isHome = fixture.isHome;
+                const myScore = isHome ? bData.homeTeam?.score : bData.awayTeam?.score;
+                const oppScore = isHome ? bData.awayTeam?.score : bData.homeTeam?.score;
+                const myWinner = isHome ? bData.homeTeam?.winner : bData.awayTeam?.winner;
+                const oppWinner = isHome ? bData.awayTeam?.winner : bData.homeTeam?.winner;
+
+                return {
+                  ...fixture,
+                  teamScore: (bData.isLive || bData.isCompleted) ? myScore : undefined,
+                  opponentScore: (bData.isLive || bData.isCompleted) ? oppScore : undefined,
+                  teamWinner: myWinner,
+                  opponentWinner: oppWinner,
+                  statusDetail: bData.statusDetail || fixture.statusDetail,
+                  isCompleted: Boolean(bData.isCompleted),
+                  isLive: Boolean(bData.isLive),
+                };
+              }
+            } catch {}
+          }
+          return fixture;
+        }),
+      );
+      setFixturesList(updated);
+      setLastUpdated(new Date());
+    } catch (e) {
+      console.error('Failed to refresh shared schedule live scores:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fixturesList, getCleanEventId]);
+
+  // Auto-poll live games
+  useEffect(() => {
+    const hasLive = fixturesList.some((f) => f.isLive);
+    const intervalMs = hasLive ? 25 * 1000 : 60 * 1000;
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      refreshLiveScores();
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [fixturesList, refreshLiveScores]);
+
+  // Refresh on tab focus
+  useEffect(() => {
+    const handleVis = () => {
+      if (document.visibilityState === 'visible') {
+        refreshLiveScores();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVis);
+    return () => document.removeEventListener('visibilitychange', handleVis);
+  }, [refreshLiveScores]);
 
   const copyShareLink = async () => {
     try {
@@ -62,34 +161,34 @@ export function ShareScheduleView({
 
   const finalCount = useMemo(
     () =>
-      fixtures.filter(
+      fixturesList.filter(
         (f) =>
           f.isCompleted ||
           (f.teamScore !== undefined && f.opponentScore !== undefined),
       ).length,
-    [fixtures],
+    [fixturesList],
   );
 
-  const upcomingCount = fixtures.length - finalCount;
+  const upcomingCount = fixturesList.length - finalCount;
 
   const filteredFixtures = useMemo(() => {
-    if (filterMode === 'all') return fixtures;
+    if (filterMode === 'all') return fixturesList;
     if (filterMode === 'final') {
-      return fixtures.filter(
+      return fixturesList.filter(
         (f) =>
           f.isCompleted ||
           (f.teamScore !== undefined && f.opponentScore !== undefined),
       );
     }
     if (filterMode === 'upcoming') {
-      return fixtures.filter(
+      return fixturesList.filter(
         (f) =>
           !f.isCompleted &&
           (f.teamScore === undefined || f.isLive),
       );
     }
-    return fixtures;
-  }, [fixtures, filterMode]);
+    return fixturesList;
+  }, [fixturesList, filterMode]);
 
   // Group by date in timezone
   const grouped = useMemo(() => {
@@ -127,7 +226,7 @@ export function ShareScheduleView({
                 : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
             }`}
           >
-            All Games ({fixtures.length})
+            All Games ({fixturesList.length})
           </button>
 
           <button
@@ -156,9 +255,24 @@ export function ShareScheduleView({
           </button>
         </div>
 
-        {/* Bookmark & Copy Actions */}
-        {!isEmbed && (
-          <div className='flex items-center gap-2'>
+        {/* Refresh & Share Actions */}
+        <div className='flex items-center gap-2 flex-wrap'>
+          <button
+            type='button'
+            onClick={() => refreshLiveScores()}
+            disabled={isRefreshing}
+            className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-all shadow-sm disabled:opacity-60'
+            title='Refresh live scores now'
+          >
+            <RefreshCw
+              className={`h-3 w-3 text-emerald-400 ${
+                isRefreshing ? 'animate-spin' : ''
+              }`}
+            />
+            <span>{isRefreshing ? 'Updating...' : 'Refresh'}</span>
+          </button>
+
+          {!isEmbed && (
             <button
               type='button'
               onClick={copyShareLink}
@@ -177,12 +291,31 @@ export function ShareScheduleView({
                 </>
               )}
             </button>
-          </div>
-        )}
+          )}
+
+          {lastUpdated && (
+            <div className='text-[10px] text-gray-400 px-1 hidden sm:flex items-center gap-1.5'>
+              {fixturesList.some((f) => f.isLive) ? (
+                <span className='inline-flex items-center gap-1 text-rose-400 font-semibold'>
+                  <span className='h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse' />
+                  Live Sync
+                </span>
+              ) : (
+                <span className='inline-flex items-center gap-1 text-emerald-400/80'>
+                  <span className='h-1.5 w-1.5 rounded-full bg-emerald-400' />
+                  Live
+                </span>
+              )}
+              <span>
+                {formatInTimeZone(lastUpdated, userTimezone, 'h:mm:ss a')}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Fixtures List */}
-      {fixtures.length === 0 ? (
+      {fixturesList.length === 0 ? (
         <div className='rounded-3xl border border-white/10 p-10 text-center bg-white/[0.02] space-y-2'>
           <Calendar className='mx-auto h-8 w-8 text-gray-500/60 mb-2' />
           <p className='text-sm font-semibold text-white'>

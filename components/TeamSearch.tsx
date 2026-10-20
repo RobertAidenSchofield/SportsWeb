@@ -34,8 +34,9 @@ export function TeamSearch({
   const [query, setQuery] = useState('');
   const [selectedLeague, setSelectedLeague] = useState('all');
   const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [crossLeagueMatches, setCrossLeagueMatches] = useState<Team[]>([]);
   const [visibleCount, setVisibleCount] = useState(48);
+  const [loading, setLoading] = useState(false);
 
   // Optimistic tracking of followed team IDs
   const [optimisticFollows, setOptimisticFollows] = useState<Set<string>>(
@@ -54,28 +55,53 @@ export function TeamSearch({
     setOptimisticFollows(new Set(initialSubscribedTeamIds));
   }, [initialSubscribedTeamIds]);
 
-  // Debounced search
+  // Debounced search with AbortController and cross-league suggestions
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
+
     const timeoutId = setTimeout(async () => {
       try {
         const params = new URLSearchParams({
-          q: query,
+          q: query.trim(),
           league: selectedLeague,
         });
-        const res = await fetch(`/api/teams/search?${params.toString()}`);
+        const res = await fetch(`/api/teams/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
         if (res.ok) {
           const data = await res.json();
-          setTeams(data.teams || []);
+          const found = (data.teams || []) as Team[];
+          setTeams(found);
+
+          // If no teams found under specific league tab, check if teams exist in all leagues
+          if (found.length === 0 && selectedLeague !== 'all' && query.trim()) {
+            const allRes = await fetch(
+              `/api/teams/search?q=${encodeURIComponent(query.trim())}&league=all`,
+              { signal: controller.signal },
+            );
+            if (allRes.ok) {
+              const allData = await allRes.json();
+              setCrossLeagueMatches((allData.teams || []) as Team[]);
+            }
+          } else {
+            setCrossLeagueMatches([]);
+          }
         }
-      } catch (err) {
-        console.error('Failed to search teams:', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to search teams:', err);
+        }
       } finally {
         setLoading(false);
       }
     }, 250);
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [query, selectedLeague]);
 
   // Auto-paginate more teams as user scrolls
@@ -173,11 +199,22 @@ export function TeamSearch({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder='Search teams by name, city, mascot, or abbreviation (e.g. Chiefs, Pats, Warriors, SF, Man U)...'
-          className='w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-10 py-3 text-base sm:text-sm text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors'
+          className='w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-20 py-3 text-base sm:text-sm text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors'
         />
-        {loading && (
-          <Loader2 className='absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-emerald-400' />
-        )}
+        <div className='absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2'>
+          {loading && (
+            <Loader2 className='h-4 w-4 animate-spin text-emerald-400' />
+          )}
+          {query && (
+            <button
+              type='button'
+              onClick={() => setQuery('')}
+              className='text-xs text-gray-400 hover:text-white px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 transition-colors'
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {/* League Filter Pills */}
@@ -199,6 +236,31 @@ export function TeamSearch({
           );
         })}
       </div>
+
+      {/* Cross-League Suggestion Banner */}
+      {teams.length === 0 && crossLeagueMatches.length > 0 && (
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-200'>
+          <span>
+            No teams found under{' '}
+            <strong className='text-white'>
+              {LEAGUE_TABS.find((t) => t.id === selectedLeague)?.label || selectedLeague}
+            </strong>
+            , but found{' '}
+            <strong className='text-emerald-300'>
+              {crossLeagueMatches.length} team(s)
+            </strong>{' '}
+            in other sports (e.g.{' '}
+            {Array.from(new Set(crossLeagueMatches.map((t) => t.league))).join(', ')})!
+          </span>
+          <button
+            type='button'
+            onClick={() => setSelectedLeague('all')}
+            className='self-start sm:self-auto shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 text-gray-950 font-bold hover:bg-emerald-400 transition-colors'
+          >
+            Show All ({crossLeagueMatches.length})
+          </button>
+        </div>
+      )}
 
       {/* Results Header Count */}
       <div className='flex items-center justify-between text-xs text-gray-400 px-0.5 pt-1'>

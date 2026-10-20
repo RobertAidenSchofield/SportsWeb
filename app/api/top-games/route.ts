@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const league = searchParams.get('league') || 'all';
+    const query = searchParams.get('q') || '';
     const limitStr = searchParams.get('limit');
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
       leagueFilter: league,
       daysAhead: 7,
       limit: isNaN(limit) ? 50 : Math.min(limit, 100),
+      searchQuery: query,
     });
 
     return NextResponse.json(

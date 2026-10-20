@@ -21,9 +21,9 @@ import {
   MatchFixture,
   Team,
   MarqueeGame,
-  marqueeToMatchFixture,
 } from '@/lib/types';
 import { getLeagueDisplayName } from '@/lib/sportsApi';
+import { assembleScheduleAction } from '@/app/actions';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BoxScoreModal } from './BoxScoreModal';
 import { ShareWeeklyModal } from './ShareWeeklyModal';
@@ -81,59 +81,11 @@ export function SchedulePreview({
       }
 
       try {
-        const nowMs = Date.now() - 7 * 24 * 3600 * 1000;
-        const maxMs = Date.now() + 8 * 24 * 3600 * 1000;
-
-        // 1. Fetch fixtures for all followed teams
-        const fixturePromises = teams.map(async (team) => {
-          try {
-            const res = await fetch(
-              `/api/teams/search?scheduleTeamId=${encodeURIComponent(team.id)}&_t=${Date.now()}`,
-              { cache: 'no-store' },
-            );
-            if (res.ok) {
-              const data = await res.json();
-              return (data.fixtures || []) as MatchFixture[];
-            }
-          } catch (e) {
-            console.error(`Error loading schedule for ${team.name}:`, e);
-          }
-          return [] as MatchFixture[];
+        // 1. Concurrently fetch and assemble unified fixtures via deep UserSchedule module
+        const unified = await assembleScheduleAction(teams, pinnedGames, {
+          daysAhead: 8,
+          includeRecentPastHours: 7 * 24,
         });
-
-        const nested = await Promise.all(fixturePromises);
-        const allFollowed = nested.flat();
-
-        // 2. Convert pinned individual games
-        const convertedPinned = pinnedGames
-          .map(marqueeToMatchFixture)
-          .filter((f) => {
-            const t = new Date(f.dateUtc).getTime();
-            return t >= nowMs && t <= maxMs;
-          });
-
-        // 3. Deduplicate by event ID
-        const fixtureMap = new Map<string, MatchFixture>();
-
-        for (const f of allFollowed) {
-          const key = getCleanEventId(f);
-          fixtureMap.set(key, { ...f });
-        }
-
-        for (const p of convertedPinned) {
-          const key = getCleanEventId(p);
-          if (fixtureMap.has(key)) {
-            const existing = fixtureMap.get(key)!;
-            existing.isPinned = true;
-            if (p.excitementScore) existing.excitementScore = p.excitementScore;
-            if (p.highlightTags) existing.highlightTags = p.highlightTags;
-            if (p.oddsDetails) existing.oddsDetails = p.oddsDetails;
-          } else {
-            fixtureMap.set(key, { ...p, isPinned: true });
-          }
-        }
-
-        const unified = Array.from(fixtureMap.values());
         const now = Date.now();
 
         // 4. Enrich ANY fixture (followed team or pinned) that has started, is live, recently completed (<48h),

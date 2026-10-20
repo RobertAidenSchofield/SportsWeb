@@ -1,19 +1,14 @@
 import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 import { Resend } from 'resend';
 import { render } from '@react-email/components';
-import { formatInTimeZone } from 'date-fns-tz';
 import { addDays, format } from 'date-fns';
-import { getSupabaseAdminClient } from '../lib/supabaseClient';
-import { getUpcomingTeamFixtures } from '../lib/sportsApi';
-import { MatchFixture, UserProfile, MarqueeGame, marqueeToMatchFixture } from '../lib/types';
+import { getSupabaseAdminClient, isBackendConfigured } from '../lib/supabaseClient';
+import { getUserSchedule } from '../lib/schedule/userSchedule';
+import { InMemorySubscriptionAdapter } from '../lib/storage/subscriptionRepository';
 import { DigestEmail } from '../emails/DigestEmail';
-
-interface UserWithSubscriptions extends UserProfile {
-  team_ids: string[];
-  pinned_games?: MarqueeGame[];
-}
 
 const isDryRun = process.argv.includes('--dry-run');
 
@@ -25,144 +20,74 @@ export async function runSportsDigestWorker() {
   console.log(`Time: ${new Date().toISOString()}`);
   console.log('='.repeat(60));
 
-  let subscriptions: any[] | null = null;
   const resendApiKey = process.env.RESEND_API_KEY;
   const resendFromEmail =
     process.env.RESEND_FROM_EMAIL ||
     'Sports Digest <digest@updates.sportsdigest.app>';
 
-  // 1. Query all subscriptions and distinct teams
+  // 1. Discover all active users with subscriptions or profiles
   console.log(
-    '\n[Step 1] Querying active subscriptions and users from Supabase...',
+    '\n[Step 1] Querying active subscribers from Supabase...',
   );
-  try {
-    const supabase = getSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .select('user_id, team_id, teams(name), profiles(id, email, timezone)');
+  let userList: Array<{ id: string; email: string }> = [];
 
-    if (error) {
-      console.warn('Supabase query error:', error.message);
-    } else {
-      subscriptions = data;
+  if (isBackendConfigured() && !isDryRun) {
+    try {
+      const supabase = getSupabaseAdminClient();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email');
+
+      if (error) {
+        console.warn('Supabase query error:', error.message);
+      } else if (data) {
+        userList = data.filter((u) => u.email);
+      }
+    } catch (err: any) {
+      console.error('Supabase configuration error:', err.message);
     }
-  } catch (err: any) {
-    if (isDryRun) {
+  }
+
+  let demoAdapter: InMemorySubscriptionAdapter | undefined;
+
+  if (userList.length === 0) {
+    if (isDryRun || !isBackendConfigured()) {
       console.log(
-        'ℹ️ Supabase not yet configured. Using sample dry-run subscriber data for demonstration.',
+        'ℹ️ Using sample dry-run subscriber data for demonstration.',
       );
-      subscriptions = [
-        {
-          user_id: 'user_sample_1',
-          team_id: 'espn:football:nfl:12', // Kansas City Chiefs
-          profiles: {
-            id: 'user_sample_1',
+      userList = [{ id: 'demo_user', email: 'fan@example.com' }];
+      demoAdapter = new InMemorySubscriptionAdapter({
+        profiles: [
+          {
+            id: 'demo_user',
             email: 'fan@example.com',
             timezone: 'America/New_York',
           },
-        },
-      ];
+        ],
+        teams: [
+          {
+            userId: 'demo_user',
+            team: {
+              id: 'espn:football:nfl:12',
+              name: 'Kansas City Chiefs',
+              sport: 'football',
+              league: 'NFL',
+              logo_url: 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png',
+            },
+          },
+        ],
+      });
     } else {
-      console.error('Supabase configuration error:', err.message);
+      console.log('No subscribers found. Exiting worker.');
       return;
     }
   }
 
-  if (!subscriptions || subscriptions.length === 0) {
-    console.log('No user subscriptions found. Exiting worker.');
-    return;
-  }
+  console.log(`Found ${userList.length} user(s) to process.`);
 
-  // Extract unique team IDs (filtering out 'game:' pinned game fallback entries)
-  const uniqueTeamIds = Array.from(
-    new Set(
-      subscriptions
-        .map((s: any) => s.team_id)
-        .filter((id: string) => id && !id.startsWith('game:')),
-    ),
-  );
+  // 2. Fetch schedule and compile email templates per user via deep UserSchedule module
   console.log(
-    `Found ${subscriptions.length} active subscription(s) across ${uniqueTeamIds.length} unique team(s).`,
-  );
-
-  // Build map of user -> subscribed team IDs & fallback pinned games
-  const usersMap = new Map<string, UserWithSubscriptions>();
-  for (const row of subscriptions) {
-    const profile = (row as any).profiles;
-    if (!profile || !profile.email) continue;
-
-    if (!usersMap.has(profile.id)) {
-      usersMap.set(profile.id, {
-        id: profile.id,
-        email: profile.email,
-        timezone: profile.timezone || 'America/New_York',
-        team_ids: [],
-        pinned_games: [],
-      });
-    }
-
-    const userObj = usersMap.get(profile.id)!;
-    if (row.team_id?.startsWith('game:')) {
-      // Parse fallback pinned game JSON if present
-      if (row.teams?.name) {
-        try {
-          const parsed = JSON.parse(row.teams.name) as MarqueeGame;
-          userObj.pinned_games!.push(parsed);
-        } catch {}
-      }
-    } else {
-      userObj.team_ids.push(row.team_id);
-    }
-  }
-
-  console.log(`Aggregating digest for ${usersMap.size} unique user(s).`);
-
-  // 1b. Query individually pinned games for users from primary table if available
-  try {
-    const supabase = getSupabaseAdminClient();
-    const { data: pinnedRows } = await supabase
-      .from('user_pinned_games')
-      .select('user_id, game_data');
-
-    if (pinnedRows && pinnedRows.length > 0) {
-      console.log(`Found ${pinnedRows.length} pinned game(s) in user_pinned_games.`);
-      for (const p of pinnedRows) {
-        if (usersMap.has(p.user_id)) {
-          const u = usersMap.get(p.user_id)!;
-          if (!u.pinned_games) u.pinned_games = [];
-          // Avoid duplicates if already populated from fallback
-          if (!u.pinned_games.some((g) => g.id === p.game_data?.id)) {
-            u.pinned_games.push(p.game_data);
-          }
-        }
-      }
-    }
-  } catch (err: any) {
-    // Non-fatal if table empty or not yet migrated
-  }
-
-  // 2. Fetch upcoming fixtures for all unique teams (next 7 days)
-  console.log(
-    '\n[Step 2] Fetching upcoming 7-day fixtures for unique teams from sports API...',
-  );
-  const teamFixturesMap = new Map<string, MatchFixture[]>();
-
-  for (const teamId of uniqueTeamIds) {
-    try {
-      const fixtures = await getUpcomingTeamFixtures(teamId, 7);
-      teamFixturesMap.set(teamId, fixtures);
-      console.log(
-        ` - Team ${teamId}: found ${fixtures.length} upcoming fixture(s)`,
-      );
-    } catch (err) {
-      console.error(`Error fetching fixtures for ${teamId}:`, err);
-      teamFixturesMap.set(teamId, []);
-    }
-  }
-
-  // 3. For each user, map their subscribed teams to fixtures and group by local date
-  console.log(
-    '\n[Step 3] Processing schedules and compiling email templates per user...',
+    '\n[Step 2] Processing user schedules and compiling email templates...',
   );
   const emailPayloads: Array<{
     from: string;
@@ -176,91 +101,44 @@ export async function runSportsDigestWorker() {
   const startDateStr = format(now, 'MMM d');
   const endDateStr = format(weekAhead, 'MMM d, yyyy');
 
-  for (const user of usersMap.values()) {
-    const userFixtures: MatchFixture[] = [];
+  for (const user of userList) {
+    try {
+      const schedule = await getUserSchedule(user.id, { daysAhead: 7 }, demoAdapter);
 
-    // Collect fixtures for this user's teams
-    for (const teamId of user.team_ids) {
-      const fixtures = teamFixturesMap.get(teamId) || [];
-      userFixtures.push(...fixtures);
+      // Render React Email template to HTML
+      const emailElement = DigestEmail({
+        userEmail: user.email,
+        userTimezone: schedule.userTimezone,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        groupedFixtures: schedule.fixturesByDate,
+        dashboardUrl: process.env.NEXT_PUBLIC_APP_URL
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`
+          : 'http://localhost:3000/dashboard',
+      });
+
+      const emailHtml = await render(emailElement);
+      const matchCount = schedule.fixtures.length;
+      const subject = `Your Sports Digest: ${matchCount} game${matchCount === 1 ? '' : 's'} this week (${startDateStr} - ${endDateStr})`;
+
+      emailPayloads.push({
+        from: resendFromEmail,
+        to: user.email,
+        subject,
+        html: emailHtml,
+      });
+
+      console.log(
+        ` -> Prepared digest for ${user.email} (${schedule.userTimezone}): ${matchCount} match(es) across ${schedule.followedTeams.length} team(s)`,
+      );
+    } catch (err) {
+      console.error(`Error compiling digest for user ${user.id}:`, err);
     }
-
-    // Collect individually pinned games (next 7 days)
-    const nowMs = Date.now() - 3.5 * 3600 * 1000;
-    const maxMs = Date.now() + 7 * 24 * 3600 * 1000;
-    for (const pg of user.pinned_games || []) {
-      const converted = marqueeToMatchFixture(pg);
-      const gameTime = new Date(converted.dateUtc).getTime();
-      if (gameTime >= nowMs && gameTime <= maxMs) {
-        userFixtures.push(converted);
-      }
-    }
-
-    // Deduplicate any matches where both teams are followed by the user
-    const seenEventIds = new Set<string>();
-    const distinctFixtures = userFixtures.filter((f) => {
-      if (seenEventIds.has(f.id)) return false;
-      seenEventIds.add(f.id);
-      return true;
-    });
-
-    // Sort by UTC kickoff
-    distinctFixtures.sort(
-      (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
-    );
-
-    // Group fixtures by local date in user's timezone
-    const groupedFixtures: Record<string, MatchFixture[]> = {};
-    for (const fixture of distinctFixtures) {
-      try {
-        const dateKey = formatInTimeZone(
-          new Date(fixture.dateUtc),
-          user.timezone,
-          'EEEE, MMMM d',
-        );
-        if (!groupedFixtures[dateKey]) {
-          groupedFixtures[dateKey] = [];
-        }
-        groupedFixtures[dateKey].push(fixture);
-      } catch (e) {
-        const fallback = 'Upcoming Matches';
-        if (!groupedFixtures[fallback]) groupedFixtures[fallback] = [];
-        groupedFixtures[fallback].push(fixture);
-      }
-    }
-
-    // Render React Email template to HTML
-    const emailElement = DigestEmail({
-      userEmail: user.email,
-      userTimezone: user.timezone,
-      startDate: startDateStr,
-      endDate: endDateStr,
-      groupedFixtures,
-      dashboardUrl: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`
-        : 'http://localhost:3000/dashboard',
-    });
-
-    const emailHtml = await render(emailElement);
-
-    const gameCount = distinctFixtures.length;
-    const subject = `Your Sports Digest: ${gameCount} game${gameCount === 1 ? '' : 's'} this week (${startDateStr} - ${endDateStr})`;
-
-    emailPayloads.push({
-      from: resendFromEmail,
-      to: user.email,
-      subject,
-      html: emailHtml,
-    });
-
-    console.log(
-      ` -> Prepared digest for ${user.email} (${user.timezone}): ${gameCount} match(es) across ${user.team_ids.length} team(s)`,
-    );
   }
 
-  // 4. Dispatch batch via Resend
+  // 3. Dispatch batch via Resend
   console.log(
-    `\n[Step 4] Dispatching ${emailPayloads.length} digest email(s)...`,
+    `\n[Step 3] Dispatching ${emailPayloads.length} digest email(s)...`,
   );
 
   if (isDryRun || !resendApiKey) {
@@ -276,8 +154,6 @@ export async function runSportsDigestWorker() {
   }
 
   const resend = new Resend(resendApiKey);
-
-  // Resend batch endpoint accepts up to 100 emails at a time
   const BATCH_SIZE = 100;
   for (let i = 0; i < emailPayloads.length; i += BATCH_SIZE) {
     const batch = emailPayloads.slice(i, i + BATCH_SIZE);
@@ -300,7 +176,10 @@ export async function runSportsDigestWorker() {
 }
 
 // Auto-run when invoked via CLI
-if (require.main === module || process.argv[1]?.includes('digest-worker')) {
+const isCli = process.argv.some((arg) => arg.includes('digest-worker'));
+console.log('Worker loaded, isCli:', isCli);
+if (isCli) {
+  console.log('Triggering runSportsDigestWorker...');
   runSportsDigestWorker()
     .then(() => process.exit(0))
     .catch((err) => {
@@ -308,4 +187,3 @@ if (require.main === module || process.argv[1]?.includes('digest-worker')) {
       process.exit(1);
     });
 }
-

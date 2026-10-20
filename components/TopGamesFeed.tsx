@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import Image from 'next/image';
 import {
   Flame,
@@ -68,13 +68,41 @@ export function TopGamesFeed({
   const [copiedCal, setCopiedCal] = useState(false);
   const [, startTransition] = useTransition();
 
+  // Debounced search for matches / games across leagues
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/top-games?league=${encodeURIComponent(selectedLeague)}&q=${encodeURIComponent(searchQuery.trim())}&limit=50`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.games) {
+            setGames(data.games);
+          }
+        }
+      } catch (err) {
+        console.error('Error searching games:', err);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedLeague]);
+
   // Switch league tab and fetch games
   const handleSelectLeague = async (leagueId: string) => {
     setSelectedLeague(leagueId);
     setLoading(true);
     try {
+      const qParam = searchQuery.trim() ? `&q=${encodeURIComponent(searchQuery.trim())}` : '';
       const res = await fetch(
-        `/api/top-games?league=${encodeURIComponent(leagueId)}&limit=50`,
+        `/api/top-games?league=${encodeURIComponent(leagueId)}&limit=50${qParam}`,
       );
       if (res.ok) {
         const data = await res.json();
@@ -299,8 +327,11 @@ export function TopGamesFeed({
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
-              className='absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-white'
+              onClick={() => {
+                setSearchQuery('');
+                handleSelectLeague(selectedLeague);
+              }}
+              className='absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-white px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 transition-colors'
             >
               Clear
             </button>

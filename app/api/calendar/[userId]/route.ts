@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdminClient, isBackendConfigured } from '@/lib/supabaseClient';
-import { getUpcomingTeamFixtures } from '@/lib/sportsApi';
-import { MatchFixture, MarqueeGame, marqueeToMatchFixture } from '@/lib/types';
-import { getDemoPinnedGames } from '@/app/actions';
+import { getUserSchedule } from '@/lib/schedule/userSchedule';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,116 +33,8 @@ export async function GET(
   }
 
   try {
-    const isDemo = userId === 'demo_user' || !isBackendConfigured();
-    let teamIds: string[] = [];
-    const pinnedGames: MarqueeGame[] = [];
-
-    if (isDemo) {
-      teamIds = ['espn:football:nfl:12', 'espn:soccer:eng.1:359'];
-      pinnedGames.push(...(await getDemoPinnedGames()));
-    } else {
-      const adminClient = getSupabaseAdminClient();
-
-      // 1. Fetch user's subscriptions
-      const { data: subscriptions, error } = await adminClient
-        .from('user_subscriptions')
-        .select('team_id, teams(name, sport, league)')
-        .eq('user_id', userId);
-
-      if (error) {
-        console.error('Error fetching subscriptions for calendar:', error);
-      }
-
-      // Filter out game: prefix so team lookups only query genuine teams
-      teamIds = (subscriptions || [])
-        .map((s) => s.team_id)
-        .filter((id) => !id.startsWith('game:'));
-
-      // 2. Fetch individually pinned games for the user
-      let fetchedPinned = false;
-      try {
-        const { data: pinnedRows, error: pinErr } = await adminClient
-          .from('user_pinned_games')
-          .select('game_id, game_data')
-          .eq('user_id', userId);
-
-        if (!pinErr && pinnedRows && pinnedRows.length > 0) {
-          for (const r of pinnedRows) {
-            if (r.game_data) pinnedGames.push(r.game_data as MarqueeGame);
-          }
-          fetchedPinned = true;
-        }
-      } catch (pinnedErr) {
-        // user_pinned_games not present
-      }
-
-      // 3. Fallback: check user_subscriptions with 'game:' prefix
-      if (!fetchedPinned) {
-        const fallbackGameSubs = (subscriptions || []).filter((s: any) =>
-          s.team_id?.startsWith('game:')
-        );
-        for (const sub of fallbackGameSubs) {
-          const teamObj: any = Array.isArray(sub.teams)
-            ? sub.teams[0]
-            : sub.teams;
-          if (teamObj?.name) {
-            try {
-              const parsed = JSON.parse(teamObj.name) as MarqueeGame;
-              pinnedGames.push(parsed);
-            } catch {}
-          }
-        }
-      }
-    }
-
-    // 2. Query fixtures for all subscribed teams (next 14 days for calendar view)
-    const allFixtures: MatchFixture[] = [];
-    const fixturePromises = teamIds.map(async (teamId) => {
-      try {
-        return await getUpcomingTeamFixtures(teamId, 14);
-      } catch (e) {
-        console.error(`Error loading fixtures for team ${teamId}:`, e);
-        return [];
-      }
-    });
-
-    const results = await Promise.all(fixturePromises);
-    const flattened = results.flat();
-
-    // Deduplicate fixtures where user follows both teams
-    const seenIds = new Set<string>();
-    for (const f of flattened) {
-      if (!seenIds.has(f.id)) {
-        seenIds.add(f.id);
-        allFixtures.push(f);
-      }
-    }
-
-    // 3. Merge individually pinned games within 14-day schedule window
-    const nowMs = Date.now() - 3.5 * 3600 * 1000;
-    const maxMs = Date.now() + 14 * 24 * 3600 * 1000;
-
-    for (const pg of pinnedGames) {
-      const fixture = marqueeToMatchFixture(pg);
-      fixture.isPinned = true;
-      const gameTime = new Date(fixture.dateUtc).getTime();
-      if (gameTime >= nowMs && gameTime <= maxMs) {
-        if (!seenIds.has(fixture.id)) {
-          seenIds.add(fixture.id);
-          allFixtures.push(fixture);
-        } else {
-          const existing = allFixtures.find((x) => x.id === fixture.id);
-          if (existing) {
-            existing.isPinned = true;
-          }
-        }
-      }
-    }
-
-    // Sort all fixtures by kickoff date
-    allFixtures.sort(
-      (a, b) => new Date(a.dateUtc).getTime() - new Date(b.dateUtc).getTime(),
-    );
+    const schedule = await getUserSchedule(userId, { daysAhead: 14 });
+    const allFixtures = schedule.fixtures;
 
     // 4. Build RFC 5545 iCalendar payload
     const nowStr = formatToIcsDate(new Date());
